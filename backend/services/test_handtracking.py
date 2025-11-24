@@ -2,7 +2,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 try:
-    import hand_tracking_test as htm
+    import hand_tracking as htm
     print("HandTrackingModule imported successfully")
     print("Available attributes:", dir(htm))
     

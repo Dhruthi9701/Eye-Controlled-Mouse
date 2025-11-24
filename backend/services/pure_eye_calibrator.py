@@ -962,8 +962,8 @@ class PureEyeCalibrator:
                            (20, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         
         # Instructions
-        cv2.putText(frame, "KEEP HEAD STILL!", (20, frame.shape[0] - 80), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        #cv2.putText(frame, "KEEP HEAD STILL!", (20, frame.shape[0] - 80), 
+        #           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
         cv2.putText(frame, "Only move your EYES!", (20, frame.shape[0] - 50), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         cv2.putText(frame, "ESC: Exit, R: Reset", (20, frame.shape[0] - 20), 
@@ -1025,12 +1025,25 @@ def run_pure_eye_calibration():
         
         # Initialize MediaPipe Face Mesh with iris detection
         mp_face_mesh = mp.solutions.face_mesh
-        face_mesh = mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,      # Enable iris landmarks
-            min_detection_confidence=0.3,  # Lowered for more robust detection
-            min_tracking_confidence=0.3   # Lowered for continuous tracking
-        )
+        
+        try:
+            face_mesh = mp_face_mesh.FaceMesh(
+                max_num_faces=1,
+                refine_landmarks=True,      # Enable iris landmarks
+                min_detection_confidence=0.3,  # Lowered for more robust detection
+                min_tracking_confidence=0.3   # Lowered for continuous tracking
+            )
+        except Exception as mp_error:
+            error_msg = str(mp_error)
+            print(f"❌ MediaPipe initialization failed: {error_msg}")
+            if "Failed to parse" in error_msg or "node" in error_msg.lower():
+                print("\n🔧 This is a MediaPipe version/compatibility issue.")
+                print("   Try these solutions:")
+                print("   1. Reinstall MediaPipe: pip uninstall mediapipe && pip install mediapipe")
+                print("   2. Install specific version: pip install mediapipe==0.10.8")
+                print("   3. Check Python version compatibility (MediaPipe requires Python 3.8-3.11)")
+                print("   4. If using conda: conda install -c conda-forge mediapipe")
+            raise Exception(f"MediaPipe initialization error: {error_msg}")
         
         mp_drawing = mp.solutions.drawing_utils
         mp_drawing_styles = mp.solutions.drawing_styles
@@ -1040,7 +1053,10 @@ def run_pure_eye_calibration():
     except ImportError:
         print("❌ MediaPipe not available!")
         print("   Install MediaPipe: pip install mediapipe")
-        return
+        return None
+    except Exception as e:
+        print(f"❌ MediaPipe error: {e}")
+        return None
         
     print("🎮 Controls:")
     print("   SPACE - Start collecting data for current target")

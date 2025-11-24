@@ -1,0 +1,22 @@
+{
+  "usage_data": [],
+  "performance_metrics": {
+    "fps": 0,
+    "confidence": 1.0,
+    "attention_score": 0.3878957769494089,
+    "head_pose": [
+      13.13044418137506,
+      11.641730287075637,
+      -0.06891707441403341
+    ],
+    "calibrated": true,
+    "tracking_mode": "Pure Eye Movement",
+    "cursor_control_enabled": true,
+    "screen_engagement": true
+  },
+  "session_duration": 1763798934.537286,
+  "screen_resolution": [
+    1920,
+    1080
+  ]
+}

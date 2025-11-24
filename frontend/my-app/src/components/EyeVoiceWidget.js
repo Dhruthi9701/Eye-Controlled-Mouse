@@ -196,7 +196,7 @@ export default function EyeVoiceWidget({ onBackHome }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Hand className="w-5 h-5 text-blue-600" />
-            <span className="font-medium">Pinch Control</span>
+            <span className="font-medium">Volume Control</span>
             {loading.pinch && (
               <span className="text-xs text-blue-700 ml-2 animate-pulse">Processing...</span>
             )}
@@ -210,7 +210,7 @@ export default function EyeVoiceWidget({ onBackHome }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Hand className="w-5 h-5 text-blue-600" />
-            <span className="font-medium">Palm Recognition</span>
+            <span className="font-medium">Screenshot Capture</span>
             {loading.palm && (
               <span className="text-xs text-blue-700 ml-2 animate-pulse">Processing...</span>
             )}

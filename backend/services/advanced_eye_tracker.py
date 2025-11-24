@@ -208,6 +208,13 @@ class AdvancedEyeTracker:
         self._current_landmark_signature = None
         self._last_adjustment = np.array([0, 0])
         
+        # Double blink detection variables
+        self.blink_history = deque(maxlen=10)  # Store recent blink states
+        self.last_blink_time = 0
+        self.double_blink_window = 0.6  # 600ms window for double blink (more lenient)
+        self.blink_cooldown = 0.3  # 300ms cooldown after click to prevent multiple clicks
+        self._blink_debug_counter = 0  # For periodic debug output
+        
         print("🚀 Advanced Eye Tracker initialized")
         print(f"📺 Screen: {self.screen_w}x{self.screen_h}")
         print("📷 Coordinate system: Non-mirrored (matches calibrator)")
@@ -580,29 +587,54 @@ class AdvancedEyeTracker:
         return yaw, pitch, roll
     
     def _calculate_blink_ratio(self, landmarks, w: int, h: int) -> float:
-        """Calculate eye aspect ratio for blink detection"""
-        # Left eye landmarks
-        left_eye_landmarks = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+        """Calculate eye aspect ratio for blink detection using both eyes"""
+        # Standard EAR calculation uses 6 points per eye
+        # Left eye: outer corner, inner corner, top, bottom (2 vertical points)
+        left_eye_points = [33, 133, 159, 145, 158, 153]  # [outer, inner, top1, bottom1, top2, bottom2]
+        # Right eye: same pattern
+        right_eye_points = [362, 263, 386, 374, 385, 380]
         
-        # Get eye points
-        left_points = []
-        for idx in left_eye_landmarks:
-            point = landmarks.landmark[idx]
-            left_points.append([point.x * w, point.y * h])
+        def calculate_ear(point_indices):
+            """Calculate Eye Aspect Ratio using 6 points"""
+            try:
+                # Get the 6 key points
+                p1 = landmarks.landmark[point_indices[0]]  # Outer corner
+                p2 = landmarks.landmark[point_indices[1]]  # Inner corner
+                p3 = landmarks.landmark[point_indices[2]]  # Top point 1
+                p4 = landmarks.landmark[point_indices[3]]  # Bottom point 1
+                p5 = landmarks.landmark[point_indices[4]]  # Top point 2
+                p6 = landmarks.landmark[point_indices[5]]  # Bottom point 2
+                
+                # Convert to pixel coordinates
+                def dist(p1, p2):
+                    return math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
+                
+                # Calculate vertical distances (two different vertical measurements)
+                vertical1 = dist(p3, p4) * h
+                vertical2 = dist(p5, p6) * h
+                
+                # Calculate horizontal distance
+                horizontal = dist(p1, p2) * w
+                
+                # Avoid division by zero
+                if horizontal == 0:
+                    return 0.3  # Default open eye value
+                
+                # Eye Aspect Ratio: average of two vertical distances divided by horizontal
+                ear = (vertical1 + vertical2) / (2.0 * horizontal)
+                return ear
+            except Exception as e:
+                # Return default if calculation fails
+                return 0.3
         
-        left_points = np.array(left_points)
+        # Calculate EAR for both eyes
+        left_ear = calculate_ear(left_eye_points)
+        right_ear = calculate_ear(right_eye_points)
         
-        # Calculate eye aspect ratio
-        # Vertical distances
-        vertical1 = np.linalg.norm(left_points[1] - left_points[5])
-        vertical2 = np.linalg.norm(left_points[2] - left_points[4])
+        # Average both eyes for more reliable detection
+        avg_ear = (left_ear + right_ear) / 2.0
         
-        # Horizontal distance
-        horizontal = np.linalg.norm(left_points[0] - left_points[3])
-        
-        # Eye aspect ratio
-        ear = (vertical1 + vertical2) / (2.0 * horizontal)
-        return ear
+        return avg_ear
     
     def calculate_gaze_point(self) -> GazePoint:
         """Calculate gaze point using advanced algorithms"""
@@ -1211,9 +1243,68 @@ class AdvancedEyeTracker:
         return True
     
     def detect_blink_click(self) -> bool:
-        """Detect intentional blink for clicking"""
-        if self.eye_state.blink_ratio < 0.15:  # Strong blink
-            return True
+        """Detect double blink for clicking"""
+        current_time = time.time()
+        
+        # Check if we're in cooldown period (prevent multiple clicks)
+        if current_time - self.last_blink_time < self.blink_cooldown:
+            return False
+        
+        # Detect if eyes are currently closed (blinking)
+        # Adjusted threshold: normal eyes open ~0.25-0.35, blinking <0.22
+        is_blinking = self.eye_state.blink_ratio < 0.22  # More sensitive threshold
+        
+        # Debug output (every 30 frames to avoid spam)
+        self._blink_debug_counter += 1
+        if self._blink_debug_counter % 30 == 0:
+            print(f"👁️  Blink Debug: EAR={self.eye_state.blink_ratio:.3f}, is_blinking={is_blinking}, history_size={len(self.blink_history)}")
+        
+        # Add current blink state to history
+        self.blink_history.append({
+            'is_blinking': is_blinking,
+            'time': current_time,
+            'blink_ratio': self.eye_state.blink_ratio
+        })
+        
+        # Need at least 3 entries to detect double blink pattern
+        if len(self.blink_history) < 3:
+            return False
+        
+        # Get recent history (check last 5 states for more flexibility)
+        recent = list(self.blink_history)[-5:]
+        
+        # Look for double blink pattern: blink -> open -> blink
+        # More flexible: allow some frames in between
+        blink_times = []
+        for i, state in enumerate(recent):
+            if state['is_blinking']:
+                blink_times.append((i, state['time']))
+        
+        # Need at least 2 blinks
+        if len(blink_times) >= 2:
+            # Check if the last two blinks are within the time window
+            last_blink_idx, last_blink_time = blink_times[-1]
+            second_last_blink_idx, second_last_blink_time = blink_times[-2]
+            
+            time_between = last_blink_time - second_last_blink_time
+            
+            # Check if blinks are close enough in time (double blink window)
+            if time_between < self.double_blink_window:
+                # Verify there's an "open" state between them (not consecutive frames)
+                # This ensures it's a double blink, not a long single blink
+                frames_between = last_blink_idx - second_last_blink_idx
+                if frames_between >= 2:  # At least one frame of eyes open between blinks
+                    # Double blink detected!
+                    self.last_blink_time = current_time
+                    # Clear history after detection to prevent re-triggering
+                    self.blink_history.clear()
+                    return True
+                elif frames_between == 1 and time_between < 0.3:
+                    # Very quick double blink (consecutive frames but fast)
+                    self.last_blink_time = current_time
+                    self.blink_history.clear()
+                    return True
+        
         return False
     
     def get_performance_metrics(self) -> dict:
@@ -1312,7 +1403,7 @@ def create_advanced_eye_tracking_demo():
     # Small sensitivity boost applied only while eye-mouse is active. Increase slightly
     # so cursor responds a bit faster to eye movements. Tune this value as needed.
     try:
-        tracker.eye_sensitivity_multiplier = 1.50  # small, conservative increase (5%)
+        tracker.eye_sensitivity_multiplier = 1.25  # small, conservative increase (5%)
     except Exception:
         pass
     
@@ -1356,19 +1447,36 @@ def create_advanced_eye_tracking_demo():
         
         mp_face_mesh = mp.solutions.face_mesh
         mp_drawing = mp.solutions.drawing_utils
+        mp_drawing_styles = mp.solutions.drawing_styles
         
-        face_mesh = mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.3,  # Lower for continuous detection
-            min_tracking_confidence=0.2   # Lower for continuous tracking
-        )
+        try:
+            face_mesh = mp_face_mesh.FaceMesh(
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.3,  # Lower for continuous detection
+                min_tracking_confidence=0.2   # Lower for continuous tracking
+            )
+        except Exception as mp_error:
+            error_msg = str(mp_error)
+            print(f"❌ MediaPipe initialization failed: {error_msg}")
+            if "Failed to parse" in error_msg or "node" in error_msg.lower():
+                print("\n🔧 This is a MediaPipe version/compatibility issue.")
+                print("   Try these solutions:")
+                print("   1. Reinstall MediaPipe: pip uninstall mediapipe && pip install mediapipe")
+                print("   2. Install specific version: pip install mediapipe==0.10.8")
+                print("   3. Check Python version compatibility (MediaPipe requires Python 3.8-3.11)")
+                print("   4. If using conda: conda install -c conda-forge mediapipe")
+            raise Exception(f"MediaPipe initialization error: {error_msg}")
         
         print("✅ MediaPipe Face Mesh initialized successfully")
         
     except ImportError:
         print("❌ MediaPipe not available - using demo mode")
         print("   Install MediaPipe with compatible Python version to enable full functionality")
+        face_mesh = None
+    except Exception as e:
+        print(f"❌ MediaPipe error: {e}")
+        face_mesh = None
         
         # Demo mode with simulated eye movement
         while True:
@@ -1438,6 +1546,52 @@ def create_advanced_eye_tracking_demo():
                 # Process the first detected face
                 landmarks = results.multi_face_landmarks[0]
                 
+                # Draw face mesh with iris connections (like calibration window)
+                h, w = frame.shape[:2]
+                try:
+                    # Draw iris regions with complete analysis (same as calibration)
+                    mp_drawing.draw_landmarks(
+                        frame, landmarks, mp_face_mesh.FACEMESH_IRISES,
+                        landmark_drawing_spec=None,
+                        connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style())
+                    
+                    # Draw eye region boundaries
+                    left_eye_outline = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+                    right_eye_outline = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
+                    
+                    # Draw left eye outline
+                    left_points = []
+                    for idx in left_eye_outline:
+                        if idx < len(landmarks.landmark):
+                            point = landmarks.landmark[idx]
+                            left_points.append([int(point.x * w), int(point.y * h)])
+                    
+                    if len(left_points) > 3:
+                        left_points = np.array(left_points, dtype=np.int32)
+                        cv2.polylines(frame, [left_points], True, (255, 0, 255), 1)
+                    
+                    # Draw right eye outline
+                    right_points = []
+                    for idx in right_eye_outline:
+                        if idx < len(landmarks.landmark):
+                            point = landmarks.landmark[idx]
+                            right_points.append([int(point.x * w), int(point.y * h)])
+                    
+                    if len(right_points) > 3:
+                        right_points = np.array(right_points, dtype=np.int32)
+                        cv2.polylines(frame, [right_points], True, (255, 0, 255), 1)
+                    
+                    # Draw individual iris landmarks for precision feedback
+                    iris_landmarks = [469, 470, 471, 472, 474, 475, 476, 477]
+                    for idx in iris_landmarks:
+                        if idx < len(landmarks.landmark):
+                            point = landmarks.landmark[idx]
+                            px, py = int(point.x * w), int(point.y * h)
+                            cv2.circle(frame, (px, py), 3, (255, 255, 0), -1)
+                except Exception as e:
+                    # Fail silently if drawing fails
+                    pass
+                
                 # Process landmarks and calculate gaze
                 if tracker.process_face_landmarks(landmarks, frame.shape):
                     gaze_point = tracker.calculate_gaze_point()
@@ -1447,6 +1601,28 @@ def create_advanced_eye_tracking_demo():
                     # Control mouse with lower confidence threshold
                     if mouse_control_enabled and gaze_point.confidence > 0.2:
                         tracker.control_mouse(gaze_point)
+                    
+                    # Double blink detection for clicking
+                    if mouse_control_enabled:
+                        # Check for double blink
+                        if tracker.detect_blink_click():
+                            try:
+                                current_mouse_x, current_mouse_y = pyautogui.position()
+                                pyautogui.click(current_mouse_x, current_mouse_y)
+                                print(f"🖱️  DOUBLE BLINK CLICK at ({current_mouse_x}, {current_mouse_y})")
+                                # Visual feedback on frame
+                                cv2.putText(frame, "CLICK!", (frame.shape[1] - 150, 50), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
+                            except Exception as e:
+                                print(f"❌ Error clicking: {e}")
+                        
+                        # Debug: Show blink history count
+                        if hasattr(tracker, 'blink_history') and len(tracker.blink_history) > 0:
+                            recent_blinks = [b['is_blinking'] for b in list(tracker.blink_history)[-3:]]
+                            if any(recent_blinks):
+                                # Show debug info on frame (only when blinking detected)
+                                cv2.putText(frame, f"Blink History: {len(tracker.blink_history)}", 
+                                           (10, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
                     
                     # Enhanced tracking info with visual feedback
                     cv2.putText(frame, f"Gaze: ({gaze_point.x:.0f}, {gaze_point.y:.0f})", 
@@ -1513,15 +1689,17 @@ def create_advanced_eye_tracking_demo():
                             viz_x = max(5, min(viz_x, frame.shape[1] - 5))
                             viz_y = max(5, min(viz_y, frame.shape[0] - 5))
 
-                            # Draw crosshair (eye-centered visualization draws a filled marker)
+                            # Draw gaze point indicator (matching calibration style)
                             if viz_place_on_eye:
-                                # Slightly smaller marker so it doesn't obscure the eye
-                                cv2.circle(frame, (viz_x, viz_y), 4, (0, 255, 255), -1)
-                                cv2.circle(frame, (viz_x, viz_y), 7, (255, 255, 255), 2)
+                                # Yellow circle with white center (like calibration)
+                                cv2.circle(frame, (viz_x, viz_y), 8, (0, 255, 255), -1)  # Yellow outer
+                                cv2.circle(frame, (viz_x, viz_y), 5, (255, 255, 255), -1)  # White center
+                                cv2.circle(frame, (viz_x, viz_y), 3, (0, 0, 0), -1)  # Black dot
                             else:
-                                cv2.line(frame, (viz_x - 7, viz_y), (viz_x + 7, viz_y), (0, 255, 255), 2)
-                                cv2.line(frame, (viz_x, viz_y - 7), (viz_x, viz_y + 7), (0, 255, 255), 2)
-                                cv2.circle(frame, (viz_x, viz_y), 3, (0, 255, 255), 1)
+                                # Yellow circle with white center for screen-mapped visualization
+                                cv2.circle(frame, (viz_x, viz_y), 8, (0, 255, 255), -1)  # Yellow outer
+                                cv2.circle(frame, (viz_x, viz_y), 5, (255, 255, 255), -1)  # White center
+                                cv2.circle(frame, (viz_x, viz_y), 3, (0, 0, 0), -1)  # Black dot
                         except Exception as e:
                             # Fail silently on visualization errors
                             pass
@@ -1543,8 +1721,22 @@ def create_advanced_eye_tracking_demo():
                         cv2.putText(frame, f"Quality: {tracker.calibration_quality.upper()}", 
                                    (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, quality_color, 2)
                     
+                    # Show blink detection status
+                    blink_status = "Blinking" if tracker.eye_state.blink_ratio < 0.22 else "Eyes Open"
+                    blink_color = (0, 0, 255) if tracker.eye_state.blink_ratio < 0.22 else (0, 255, 0)
+                    cv2.putText(frame, f"Blink: {blink_status} (EAR: {tracker.eye_state.blink_ratio:.3f})", 
+                               (10, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.5, blink_color, 1)
+                    cv2.putText(frame, "Double blink to click", 
+                               (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                    
+                    # Show tracking mode status (like calibration window)
+                    cv2.putText(frame, "FULL FACE MESH TRACKING", 
+                               (10, frame.shape[0] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                    cv2.putText(frame, "Ultra-High Sensitivity Mode", 
+                               (10, frame.shape[0] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    
                     # Show helpful tips
-                    cv2.putText(frame, "Tips: Z=reset center, I=help", 
+                    cv2.putText(frame, "Tips: Double blink to click, Z=reset center, I=help", 
                                (10, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             else:
                 # No face detected

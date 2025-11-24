@@ -68,7 +68,8 @@ def run_volume_control():
             continue
 
         img = cv2.flip(img, 1)
-        results = hands.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = hands.process(img_rgb)
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
@@ -81,12 +82,38 @@ def run_volume_control():
                     x1, y1 = lm_list[4][1], lm_list[4][2]  # Thumb tip
                     x2, y2 = lm_list[8][1], lm_list[8][2]  # Index tip
 
+                    # Draw line between thumb and index finger
+                    cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
+                    cv2.circle(img, (x1, y1), 10, (255, 0, 0), cv2.FILLED)
+                    cv2.circle(img, (x2, y2), 10, (255, 0, 0), cv2.FILLED)
+
                     length = math.hypot(x2 - x1, y2 - y1)
                     vol = np.interp(length, [50, 300], [minVol, maxVol])
                     volBar = np.interp(length, [50, 300], [400, 150])
                     volPer = np.interp(length, [50, 300], [0, 100])
 
                     volume_interface.SetMasterVolumeLevel(vol, None)
+
+        # Draw volume bar and percentage
+        cv2.rectangle(img, (50, 150), (85, 400), (0, 255, 0), 3)
+        cv2.rectangle(img, (50, int(volBar)), (85, 400), (0, 255, 0), cv2.FILLED)
+        cv2.putText(img, f'{int(volPer)}%', (40, 450), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 3)
+        cv2.putText(img, "Volume Control", (10, 30), cv2.FONT_HERSHEY_COMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(img, "Pinch thumb and index to adjust volume", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+        # FPS Calculation
+        cTime = time.time()
+        fps = 1 / (cTime - pTime) if pTime != 0 else 0
+        pTime = cTime
+        cv2.putText(img, f'FPS: {int(fps)}', (500, 30), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
+
+        # Display camera feed
+        cv2.imshow("Volume Control", img)
+        
+        # Check for ESC key to exit
+        if cv2.waitKey(1) == 27:
+            volume_running = False
+            break
 
         # Optional: sleep to reduce CPU usage
         time.sleep(0.01)
@@ -95,6 +122,7 @@ def run_volume_control():
     if cap:
         cap.release()
         cap = None
+    cv2.destroyAllWindows()
     if hands:
         hands.close()
         hands = None
