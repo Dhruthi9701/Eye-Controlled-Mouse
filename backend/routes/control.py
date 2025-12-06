@@ -363,7 +363,9 @@ def run_voice_controller(voice_controller):
 
 @bp.route("/voice/start", methods=["POST"])
 def voice_start():
-    from services.voice_browser_control import VoiceBrowserController
+    """Start voice control (full assistant mode - includes browser + system control)"""
+    # Use VoiceAssistant which includes both browser control and system-wide control
+    from services.voice_assistant import VoiceAssistant
     global controllers
 
     # If already running, stop it first to ensure clean start
@@ -374,15 +376,30 @@ def voice_start():
         time.sleep(0.3)
 
     try:
-        vc = VoiceBrowserController()
-        controllers["voice"] = vc
+        # VoiceAssistant includes VoiceBrowserController internally, so all browser commands still work
+        # Plus it adds system-wide control (apps, files, windows, system info, etc.)
+        # Use silent_mode=True for API usage (skips greeting, reduces console output)
+        assistant = VoiceAssistant(silent_mode=True)
+        controllers["voice"] = assistant
 
-        # Use threading for voice control - pass the controller as argument
-        threading.Thread(target=run_voice_controller, args=(vc,), daemon=True).start()
-        return jsonify({"status": "Voice control started", "voice_active": True})
+        # Use threading for voice control - pass the assistant as argument
+        threading.Thread(target=run_voice_controller, args=(assistant,), daemon=True).start()
+        return jsonify({
+            "status": "Voice control started (full assistant mode)", 
+            "voice_active": True,
+            "mode": "full_assistant",
+            "features": "Browser control + System-wide control (apps, files, windows, system info)"
+        })
     except Exception as e:
         controllers["voice"] = None
         return jsonify({"error": f"Failed to start voice control: {str(e)}"}), 500
+
+@bp.route("/voice/assistant/start", methods=["POST"])
+def voice_assistant_start():
+    """Alias for /voice/start - kept for backward compatibility"""
+    # This endpoint now just calls the main voice_start function
+    # Both endpoints now use the full VoiceAssistant
+    return voice_start()
 
 
 def voice_stop_internal():

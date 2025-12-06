@@ -1060,6 +1060,7 @@ def run_pure_eye_calibration():
         
     print("🎮 Controls:")
     print("   SPACE - Start collecting data for current target")
+    print("   S - Skip calibration and use previous calibration file")
     print("   ESC - Cancel calibration")
     print("   Look at the RED target and press SPACE when ready")
     
@@ -1125,6 +1126,8 @@ def run_pure_eye_calibration():
                 else:
                     cv2.putText(target_window, "Press SPACE when ready", 
                                (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                    cv2.putText(target_window, "Press S to skip and use previous calibration", 
+                               (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             
             # Show target window
             cv2.imshow('Calibration Target', target_window)
@@ -1254,6 +1257,67 @@ def run_pure_eye_calibration():
             if key == 27:  # ESC
                 print("Calibration cancelled")
                 break
+            elif key == ord('s') or key == ord('S'):  # Skip calibration
+                print("⏭️  Skipping calibration - looking for previous calibration file...")
+                # Declare global variable first
+                global latest_calibration_file
+                
+                # Find the latest existing calibration file
+                import glob
+                current_dir = os.getcwd()
+                services_dir = os.path.dirname(os.path.abspath(__file__))
+                
+                search_dirs = [current_dir, services_dir]
+                calibration_files = []
+                
+                for search_dir in search_dirs:
+                    landmark_files = glob.glob(os.path.join(search_dir, "landmark_eye_calibration_*.json"))
+                    traditional_files = glob.glob(os.path.join(search_dir, "pure_eye_calibration_*.json"))
+                    calibration_files.extend(landmark_files + traditional_files)
+                
+                if calibration_files:
+                    # Sort by modification time and get the latest
+                    calibration_files.sort(key=os.path.getmtime, reverse=True)
+                    latest_file = calibration_files[0]
+                    print(f"✅ Found previous calibration: {os.path.basename(latest_file)}")
+                    print(f"📂 Using calibration from: {latest_file}")
+                    
+                    # Set the global variable so it can be returned
+                    latest_calibration_file = latest_file
+                    
+                    # Mark as complete to exit the loop
+                    calibrator.calibration_complete = True
+                    
+                    # Show skip message
+                    target_window.fill(0)
+                    cv2.putText(target_window, "CALIBRATION SKIPPED", 
+                               (target_window.shape[1]//2 - 300, target_window.shape[0]//2 - 50), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 255, 255), 3)
+                    cv2.putText(target_window, "Using previous calibration file", 
+                               (target_window.shape[1]//2 - 250, target_window.shape[0]//2 + 30), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    cv2.putText(target_window, f"{os.path.basename(latest_file)}", 
+                               (target_window.shape[1]//2 - 300, target_window.shape[0]//2 + 80), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                    cv2.putText(target_window, "Press any key to continue", 
+                               (target_window.shape[1]//2 - 200, target_window.shape[0]//2 + 140), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                    cv2.imshow('Calibration Target', target_window)
+                    cv2.waitKey(2000)  # Show for 2 seconds
+                    break
+                else:
+                    print("❌ No previous calibration file found!")
+                    print("⚠️  You must complete calibration at least once.")
+                    # Show error message on target window
+                    target_window.fill(0)
+                    cv2.putText(target_window, "NO PREVIOUS CALIBRATION FOUND", 
+                               (target_window.shape[1]//2 - 400, target_window.shape[0]//2), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 255), 3)
+                    cv2.putText(target_window, "Please complete calibration", 
+                               (target_window.shape[1]//2 - 250, target_window.shape[0]//2 + 60), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                    cv2.imshow('Calibration Target', target_window)
+                    cv2.waitKey(2000)  # Show for 2 seconds
             elif key == ord(' '):  # SPACE
                 if not calibrator.is_collecting and calibrator.current_point_index < len(calibrator.calibration_points):
                     if face_detected and results.multi_face_landmarks:  # Use enhanced detection logic
@@ -1307,7 +1371,6 @@ def run_pure_eye_calibration():
     # Return the filename of the latest saved calibration if available
     try:
         # Prefer module-level exposed variable
-        global latest_calibration_file
         if latest_calibration_file:
             return latest_calibration_file
     except Exception:

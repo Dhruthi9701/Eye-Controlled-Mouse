@@ -21,12 +21,14 @@ import queue
 import os
 import win32gui
 import win32con
+import win32process
 import psutil
 import base64
 from io import BytesIO
 from PIL import Image
 import ctypes
 from ctypes import wintypes
+import shutil
 
 # Load environment variables
 try:
@@ -59,7 +61,13 @@ class VoiceBrowserController:
     def __init__(self):
         """Initialize the voice browser controller"""
         self.recognizer = sr.Recognizer()
-        self.microphone = sr.Microphone()
+        try:
+            self.microphone = sr.Microphone()
+        except Exception as e:
+            # Don't crash if audio input device or handles are unavailable
+            print(f"⚠️ Failed to initialize microphone: {e}")
+            print("💡 Microphone unavailable — voice input will be disabled.")
+            self.microphone = None
         self.driver = None
         self.listening = False
         self.command_queue = queue.Queue()
@@ -70,6 +78,7 @@ class VoiceBrowserController:
         self.recognizer.dynamic_energy_threshold = True
         self.recognizer.pause_threshold = 1.2  # Longer pause for search queries
         self.search_mode = False
+        self.find_mode = False  # two-step find mode for active-window search
         
         # Browser automation settings
         self.chrome_path = self._find_chrome_path()
@@ -137,18 +146,23 @@ class VoiceBrowserController:
     
     def _find_chrome_path(self):
         """Find Chrome executable path"""
+        # Use environment variables for user-specific paths
         possible_paths = [
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-            r"C:\Users\Dhruthi M Sathish\AppData\Local\Google\Chrome\Application\chrome.exe"
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Google\Chrome\Application\chrome.exe"),
+            os.path.expandvars(r"%PROGRAMFILES(X86)%\Google\Chrome\Application\chrome.exe"),
         ]
         
         for path in possible_paths:
             expanded_path = os.path.expandvars(path)
             if os.path.exists(expanded_path):
+                print(f"✅ Found Chrome at: {expanded_path}")
                 return expanded_path
         
         print("⚠️ Chrome not found in default locations")
+        print("💡 Trying to use system default browser instead...")
         return None
     
     def find_chrome_window(self):
@@ -265,6 +279,9 @@ class VoiceBrowserController:
                     if self.search_mode:
                         print("\n🔍 Listening for search query...")
                         audio = self.recognizer.listen(source, timeout=2, phrase_time_limit=10)
+                    elif self.find_mode:
+                        print("\n🔎 Listening for find query (will search inside the active window)...")
+                        audio = self.recognizer.listen(source, timeout=3, phrase_time_limit=8)
                     else:
                         print("\n👂 Listening...")
                         audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=5)
@@ -300,9 +317,73 @@ class VoiceBrowserController:
                 self.search_query(command)
                 self.search_mode = False
                 return
+            # Handle find mode (two-step find in active window)
+            if self.find_mode:
+                print(f"🔎 Find query captured: '{command}'")
+                self.find_in_active(command)
+                self.find_mode = False
+                return
             
+            # Drive commands: try to detect "open D drive", "open d:", "open d", etc.
+            m_drive = (re.search(r'open\s+(?:the\s+)?([a-z])\s*drive', command) or
+                       re.search(r'open\s+(?:the\s+)?drive\s+([a-z])', command) or
+                       re.search(r'open\s+(?:the\s+)?([a-z]):', command) or
+                       re.search(r'open\s+(?:the\s+)?([a-z])\b', command))
+
+            if m_drive and 'open' in command:
+                drive_letter = m_drive.group(1).upper()
+                print(f"🔎 Detected drive open command for: {drive_letter}:")
+                self.open_drive(drive_letter)
+                return
+
             if "open chrome" in command:
                 self.open_chrome()
+
+            if "open vs code" in command or "open vscode" in command or "open visual studio code" in command:
+                self.open_vs_code()
+
+            # Maximize VS Code explicitly
+            if ("maximize" in command or "maximise" in command) and ("vs code" in command or "vscode" in command or "visual studio code" in command):
+                self.maximize_vscode()
+                return
+
+            # Minimize VS Code explicitly
+            if ("minimize" in command or "minimise" in command) and ("vs code" in command or "vscode" in command or "visual studio code" in command):
+                self.minimize_vscode()
+                return
+
+            # Support possible misrecognitions like 'mini' used for 'find'
+            if command.startswith('mini '):
+                q = command.replace('mini ', '', 1).strip()
+                if q:
+                    self.find_in_active(q)
+                    return
+
+            # Find in active window: explicit patterns or two-step find mode.
+            # Match commands like "find cats", "find in active tab cats", "search this page for cats", or just "find" to enter two-step mode.
+            if command.startswith('find '):
+                # treat 'find <query>' as find-in-active
+                query = command.replace('find ', '', 1).strip()
+                if query:
+                    self.find_in_active(query)
+                    return
+
+            # Phrases that indicate searching inside the active tab/window
+            if any(phr in command for phr in ['find in active', 'search in active', 'search in active tab', 'find in active tab', 'find this page', 'search this page', 'find in tab', 'search in tab']):
+                # try to extract query following the phrase
+                m_find = re.search(r'(?:find|search).*?(?:in (?:the )?(?:active|this|current)(?: tab| page)?)[\s:\-]*(.*)', command)
+                if m_find and m_find.group(1).strip():
+                    self.find_in_active(m_find.group(1).strip())
+                    return
+                else:
+                    print("🎤 Find mode activated! Say the text to find in the active window...")
+                    self.find_mode = True
+                    return
+
+            if command == 'find':
+                print("🎤 Find mode activated! Say the text to find in the active window...")
+                self.find_mode = True
+                return
             
             elif "search" in command and len(command.split()) == 1:
                 # Just "search" command - enter search mode
@@ -322,8 +403,53 @@ class VoiceBrowserController:
                 else:
                     print("❓ No search query provided. Try: 'Search cats' or just say 'Search' first")
             
-            elif "click" in command and len(command.strip()) <= 6:  # Just "click" command
-                self.click_at_cursor()
+            # Click commands: supports 'click', 'click here', 'double click', 'right click', 'click at 200 300'
+            elif 'click' in command:
+                # Priority: double/right/middle
+                try:
+                    if 'double' in command:
+                        # double click at cursor or coordinates
+                        m_coord = re.search(r'click(?: at)?\s*(\d+)\s*[ ,]\s*(\d+)', command)
+                        if m_coord:
+                            x = int(m_coord.group(1)); y = int(m_coord.group(2))
+                            print(f"🖱️ Double-clicking at ({x},{y})")
+                            pyautogui.doubleClick(x=x, y=y)
+                        else:
+                            print("🖱️ Double-clicking at current cursor position")
+                            pyautogui.doubleClick()
+                        return
+
+                    if 'right' in command or 'right-click' in command or 'right click' in command:
+                        m_coord = re.search(r'click(?: at)?\s*(\d+)\s*[ ,]\s*(\d+)', command)
+                        if m_coord:
+                            x = int(m_coord.group(1)); y = int(m_coord.group(2))
+                            print(f"🖱️ Right-clicking at ({x},{y})")
+                            pyautogui.click(x=x, y=y, button='right')
+                        else:
+                            print("🖱️ Right-clicking at current cursor position")
+                            pyautogui.click(button='right')
+                        return
+
+                    if 'middle' in command or 'middle-click' in command:
+                        print("🖱️ Middle-clicking at current cursor position")
+                        pyautogui.click(button='middle')
+                        return
+
+                    # Coordinates specified: 'click at 200 300' or 'click 200,300'
+                    m_coord = re.search(r'click(?: at)?\s*(\d+)\s*[ ,]\s*(\d+)', command)
+                    if m_coord:
+                        x = int(m_coord.group(1)); y = int(m_coord.group(2))
+                        print(f"🖱️ Clicking at ({x},{y})")
+                        pyautogui.click(x=x, y=y)
+                        return
+
+                    # 'click here' or plain 'click' -> click current cursor
+                    print("🖱️ Clicking at current cursor position (default)")
+                    self.click_at_cursor()
+                except pyautogui.FailSafeException as fe:
+                    print(f"❌ PyAutoGUI failsafe triggered: {fe}")
+                except Exception as e:
+                    print(f"❌ Click command failed: {e}")
             
             elif "open another tab" in command or "new tab" in command:
                 self.open_new_tab()
@@ -430,7 +556,7 @@ class VoiceBrowserController:
         try:
             print("🌐 Opening Chrome...")
             
-            if self.chrome_path:
+            if self.chrome_path and os.path.exists(self.chrome_path):
                 # Open Chrome with Google homepage in single window
                 print(f"🚀 Starting Chrome from: {self.chrome_path}")
                 subprocess.Popen([
@@ -441,7 +567,10 @@ class VoiceBrowserController:
                 ])
             else:
                 # Fallback - open Google in default browser
+                print("⚠️ Chrome path not found, using default browser...")
                 webbrowser.open('https://www.google.com')
+                print("✅ Opened Google in default browser!")
+                return
             
             # Wait for Chrome to fully load
             print("⏰ Waiting for Chrome to load...")
@@ -452,8 +581,87 @@ class VoiceBrowserController:
             
             print("✅ Chrome opened with Google homepage!")
             
+        except FileNotFoundError as e:
+            print(f"❌ Chrome executable not found: {e}")
+            print("💡 Opening in default browser instead...")
+            try:
+                webbrowser.open('https://www.google.com')
+                print("✅ Opened Google in default browser!")
+            except Exception as fallback_error:
+                print(f"❌ Failed to open browser: {fallback_error}")
+
+    def open_vs_code(self):
+        """Open Visual Studio Code using common locations or 'code' in PATH"""
+        try:
+            print("🧑‍💻 Opening VS Code...")
+            # Try 'code' in PATH first
+            code_cmd = shutil.which('code')
+            if code_cmd:
+                subprocess.Popen([code_cmd])
+                print("✅ VS Code opened using 'code' from PATH")
+                return
+
+            # Try common installation paths
+            possible = [
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"),
+                os.path.expandvars(r"%PROGRAMFILES%\Microsoft VS Code\Code.exe"),
+                os.path.expandvars(r"%PROGRAMFILES(x86)%\Microsoft VS Code\Code.exe"),
+            ]
+
+            for p in possible:
+                if p and os.path.exists(p):
+                    subprocess.Popen([p])
+                    print(f"✅ VS Code opened from: {p}")
+                    return
+
+            # Fallback: try to open via startfile (opens associated app if available)
+            try:
+                os.startfile('code')
+                print("✅ Attempted to open VS Code via os.startfile('code')")
+                return
+            except Exception:
+                pass
+
+            print("❌ Could not find VS Code executable. Make sure VS Code is installed and 'code' is in PATH.")
         except Exception as e:
-            print(f"❌ Failed to open Chrome: {e}")
+            print(f"❌ Failed to open VS Code: {e}")
+
+    def open_drive(self, drive_letter):
+        """Open a Windows drive in File Explorer (e.g., D, E)
+
+        drive_letter: single uppercase letter (A-Z)
+        """
+        try:
+            if not drive_letter or len(drive_letter) != 1 or not drive_letter.isalpha():
+                print(f"❌ Invalid drive letter: {drive_letter}")
+                return
+
+            path = f"{drive_letter}:/"
+            # Normalize to backslash path for explorer
+            explorer_path = f"{drive_letter}:\\"
+
+            if os.path.exists(path) or os.path.exists(explorer_path):
+                try:
+                    # Use explorer to open the drive root
+                    subprocess.Popen(['explorer', f'{drive_letter}:\\'])
+                    print(f"✅ Opened drive {drive_letter}:\\ in File Explorer")
+                except Exception as e:
+                    # Fallback to os.startfile
+                    try:
+                        os.startfile(f"{drive_letter}:/")
+                        print(f"✅ Opened drive {drive_letter}:/ via os.startfile")
+                    except Exception as e2:
+                        print(f"❌ Failed to open drive {drive_letter}: {e} / {e2}")
+            else:
+                print(f"❌ Drive {drive_letter}: not found or not accessible")
+        except Exception as e:
+            print(f"❌ Error opening drive {drive_letter}: {e}")
+            print("💡 Trying default browser...")
+            try:
+                webbrowser.open('https://www.google.com')
+                print("✅ Opened Google in default browser!")
+            except Exception as fallback_error:
+                print(f"❌ Failed to open browser: {fallback_error}")
     
     def manual_chrome_focus_helper(self):
         """Helper method to manually ensure Chrome focus"""
@@ -461,7 +669,12 @@ class VoiceBrowserController:
         print("1. Click on Chrome window manually")
         print("2. Make sure Chrome is visible on screen")
         print("3. Press any key when Chrome is focused...")
-        input("Press Enter when Chrome is focused and ready...")
+        try:
+            input("Press Enter when Chrome is focused and ready...")
+        except (OSError, EOFError) as e:
+            # Happens when running without an attached console (WinError 6 etc.)
+            print(f"⚠️ No console input available: {e}")
+            print("💡 Continuing without manual confirmation.")
         
         # Test if Chrome is actually focused
         try:
@@ -491,7 +704,12 @@ class VoiceBrowserController:
             # If automatic focus fails, offer manual option
             if not focused:
                 print("⚠️ Automatic Chrome focus failed!")
-                response = input("Try manual focus? (y/n): ").lower()
+                try:
+                    response = input("Try manual focus? (y/n): ").lower()
+                except (OSError, EOFError) as e:
+                    print(f"⚠️ No console input available: {e}")
+                    response = 'n'
+
                 if response == 'y':
                     focused = self.manual_chrome_focus_helper()
             
@@ -640,18 +858,24 @@ class VoiceBrowserController:
             print(f"❌ PyAutoGUI fallback failed: {e}")
     
     def click_at_cursor(self):
-        """Click at the current cursor position"""
+        """Click at the current cursor position or specified coordinates.
+
+        Optional parameters are passed via attributes on the instance prior to calling
+        or by calling helper methods. For normal use just call without args.
+        """
         try:
             print("🖱️ Clicking at current cursor position...")
-            
+
             # Get current cursor position
             current_x, current_y = pyautogui.position()
             print(f"📍 Cursor position: ({current_x}, {current_y})")
-            
-            # Click at current position
+
+            # Perform click with basic safeguards
             pyautogui.click(current_x, current_y)
             print("✅ Clicked successfully!")
-            
+
+        except pyautogui.FailSafeException as fe:
+            print(f"❌ PyAutoGUI failsafe triggered during click: {fe}")
         except Exception as e:
             print(f"❌ Failed to click: {e}")
     
@@ -772,6 +996,78 @@ class VoiceBrowserController:
         windows = []
         win32gui.EnumWindows(enum_windows_callback, windows)
         return windows[0] if windows else None
+
+    def find_vscode_window(self):
+        """Find a Visual Studio Code window handle by title or class name"""
+        def enum_windows_callback(hwnd, windows):
+            if win32gui.IsWindowVisible(hwnd):
+                try:
+                    window_text = win32gui.GetWindowText(hwnd)
+                    if not window_text:
+                        return True
+                    lower = window_text.lower()
+                    # VS Code window titles often contain 'visual studio code' or 'vscode'
+                    if 'visual studio code' in lower or 'vscode' in lower or ' - code' in lower:
+                        windows.append(hwnd)
+                        return True
+                    # Fall back: try checking process name for Code.exe
+                    try:
+                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                        proc = psutil.Process(pid)
+                        pname = proc.name().lower()
+                        if 'code.exe' in pname or pname.startswith('code'):
+                            windows.append(hwnd)
+                    except Exception:
+                        pass
+                except:
+                    pass
+            return True
+
+        windows = []
+        win32gui.EnumWindows(enum_windows_callback, windows)
+        return windows[0] if windows else None
+
+    def maximize_vscode(self):
+        """Maximize the Visual Studio Code window if found"""
+        try:
+            print("📈 Maximizing VS Code...")
+            hwnd = self.find_vscode_window()
+            if not hwnd:
+                print("❌ VS Code window not found")
+                return
+
+            try:
+                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                win32gui.SetForegroundWindow(hwnd)
+                time.sleep(0.2)
+                title = win32gui.GetWindowText(hwnd)
+                print(f"✅ VS Code maximized: {title}")
+            except Exception as e:
+                print(f"❌ Failed to maximize VS Code: {e}")
+
+        except Exception as e:
+            print(f"❌ Error maximizing VS Code: {e}")
+    
+    def minimize_vscode(self):
+        """Minimize the Visual Studio Code window if found"""
+        try:
+            print("📉 Minimizing VS Code...")
+            hwnd = self.find_vscode_window()
+            if not hwnd:
+                print("❌ VS Code window not found")
+                return
+
+            try:
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                # Do not force foreground when minimizing
+                time.sleep(0.15)
+                title = win32gui.GetWindowText(hwnd)
+                print(f"✅ VS Code minimized: {title}")
+            except Exception as e:
+                print(f"❌ Failed to minimize VS Code: {e}")
+
+        except Exception as e:
+            print(f"❌ Error minimizing VS Code: {e}")
     
     def get_active_window(self):
         """Get the currently active (focused) window handle"""
@@ -1164,6 +1460,52 @@ class VoiceBrowserController:
         except Exception as e:
             print(f"❌ Failed to capture screen: {e}")
             return None
+
+    def find_in_active(self, query):
+        """Perform an in-window search (Ctrl+F or F3 for Explorer) in the currently active window."""
+        try:
+            print(f"🔎 Performing find in active window for: '{query}'")
+
+            active_hwnd = self.get_active_window()
+            window_text = ""
+            class_name = ""
+            try:
+                window_text = win32gui.GetWindowText(active_hwnd) or ""
+                class_name = win32gui.GetClassName(active_hwnd) or ""
+            except Exception:
+                pass
+
+            # Decide which keystroke to use for search
+            is_explorer = False
+            try:
+                if 'explorer' in window_text.lower() or 'cabinetwclass' in class_name.lower() or 'explorewclass' in class_name.lower():
+                    is_explorer = True
+            except Exception:
+                is_explorer = False
+
+            # Give visual focus a moment
+            time.sleep(0.2)
+
+            if is_explorer:
+                # Explorer: F3 focuses search box
+                pyautogui.press('f3')
+            else:
+                # Most apps: Ctrl+F
+                pyautogui.hotkey('ctrl', 'f')
+
+            time.sleep(0.2)
+
+            # Type the query
+            for ch in query:
+                pyautogui.typewrite(ch)
+                time.sleep(0.01)
+
+            time.sleep(0.1)
+            pyautogui.press('enter')
+
+            print("✅ Find completed in active window.")
+        except Exception as e:
+            print(f"❌ Failed to perform in-window find: {e}")
     
     def analyze_screen(self):
         """Analyze current screen using Gemini API and provide description"""

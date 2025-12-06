@@ -1,0 +1,36 @@
+{
+  "app_mappings": {
+    "word": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+    "excel": "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
+    "powerpoint": "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
+    "outlook": "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
+    "chrome": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "edge": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "firefox": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+    "notepad": "notepad.exe",
+    "calculator": "calc.exe",
+    "task manager": "taskmgr.exe",
+    "control panel": "control.exe",
+    "settings": "ms-settings:",
+    "file explorer": "explorer.exe",
+    "this pc": "explorer.exe",
+    "command prompt": "cmd.exe",
+    "powershell": "powershell.exe"
+  },
+  "custom_commands": {
+    "open this pc": {
+      "action": "open_location",
+      "location": "this pc"
+    },
+    "open desktop": {
+      "action": "open_location",
+      "location": "desktop"
+    },
+    "open documents": {
+      "action": "open_location",
+      "location": "documents"
+    }
+  },
+  "notes": "You can customize app paths here. The system will auto-detect if paths don't exist."
+}
+
