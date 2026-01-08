@@ -1,9 +1,3 @@
-"""
-Voice-Controlled Browser Automation Script
-Recognizes voice commands to control Chrome browser with various actions
-Enhanced with Gemini API for screen analysis and intelligent Q&A
-"""
-
 import speech_recognition as sr
 import pyautogui
 import subprocess
@@ -30,26 +24,20 @@ import ctypes
 from ctypes import wintypes
 import shutil
 
-# Load environment variables
 try:
     from dotenv import load_dotenv
-    # Try loading from multiple locations
-    # 1. Project root (default)
     load_dotenv()
-    # 2. backend/services folder
     current_dir = os.path.dirname(os.path.abspath(__file__))
     services_env = os.path.join(current_dir, '.env')
     if os.path.exists(services_env):
         load_dotenv(services_env)
         print(f"✅ Loaded .env from services folder: {services_env}")
-    # 3. Also try parent directory (project root from services folder)
     parent_env = os.path.join(os.path.dirname(current_dir), '.env')
     if os.path.exists(parent_env):
         load_dotenv(parent_env)
 except ImportError:
     print("⚠️ python-dotenv not installed. Install with: pip install python-dotenv")
 
-# Gemini API
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
@@ -59,12 +47,10 @@ except ImportError:
 
 class VoiceBrowserController:
     def __init__(self):
-        """Initialize the voice browser controller"""
         self.recognizer = sr.Recognizer()
         try:
             self.microphone = sr.Microphone()
         except Exception as e:
-            # Don't crash if audio input device or handles are unavailable
             print(f"⚠️ Failed to initialize microphone: {e}")
             print("💡 Microphone unavailable — voice input will be disabled.")
             self.microphone = None
@@ -73,17 +59,14 @@ class VoiceBrowserController:
         self.command_queue = queue.Queue()
        
         
-        # Configure speech recognition
         self.recognizer.energy_threshold = 300
         self.recognizer.dynamic_energy_threshold = True
-        self.recognizer.pause_threshold = 1.2  # Longer pause for search queries
+        self.recognizer.pause_threshold = 1.2
         self.search_mode = False
-        self.find_mode = False  # two-step find mode for active-window search
+        self.find_mode = False
         
-        # Browser automation settings
         self.chrome_path = self._find_chrome_path()
         
-        # Initialize Gemini API
         self.gemini_model = None
         self._initialize_gemini()
         
@@ -111,16 +94,6 @@ class VoiceBrowserController:
         print("   • 'Stop listening' - Exit the program")
     
     def _initialize_gemini(self):
-        """
-        Initialize Gemini API with API key from .env file
-        
-        Note: Gemini API is used for screen analysis features, NOT for word meaning searches.
-        - Word meaning searches use Google search (no API needed)
-        - Gemini API is used for:
-          * "What's on my screen?" - Analyzes and describes the current screen
-          * "Ask about [question]" - Answers questions about what's visible on screen
-        These features require vision AI to understand screenshots.
-        """
         if not GEMINI_AVAILABLE:
             print("⚠️ Gemini API not available. Install google-generativeai package.")
             return
@@ -134,7 +107,6 @@ class VoiceBrowserController:
                 return
             
             genai.configure(api_key=api_key)
-            # Using gemini-2.0-flash for vision tasks (screen analysis)
             self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
             print("✅ Gemini API initialized successfully with gemini-2.0-flash!")
             print("💡 Gemini is used for screen analysis features (not word meanings)")
@@ -145,8 +117,6 @@ class VoiceBrowserController:
     
     
     def _find_chrome_path(self):
-        """Find Chrome executable path"""
-        # Use environment variables for user-specific paths
         possible_paths = [
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
@@ -183,11 +153,9 @@ class VoiceBrowserController:
         try:
             print("🎯 Focusing Chrome window...")
             
-            # Method 1: Try finding Chrome window
             chrome_hwnd = self.find_chrome_window()
             if chrome_hwnd:
                 try:
-                    # Force restore and focus
                     win32gui.ShowWindow(chrome_hwnd, win32con.SW_RESTORE)
                     win32gui.ShowWindow(chrome_hwnd, win32con.SW_SHOW)
                     win32gui.SetForegroundWindow(chrome_hwnd)
@@ -197,13 +165,11 @@ class VoiceBrowserController:
                 except Exception as e:
                     print(f"Window API failed: {e}")
             
-            # Method 2: Alt+Tab approach with verification
             print("🔄 Using Alt+Tab method...")
             for i in range(3):
                 pyautogui.hotkey('alt', 'tab')
                 time.sleep(0.8)
                 
-                # Test if Chrome is focused by trying Ctrl+L
                 try:
                     pyautogui.hotkey('ctrl', 'l')
                     time.sleep(0.3)
@@ -213,17 +179,14 @@ class VoiceBrowserController:
                 except:
                     continue
             
-            # Method 3: Click on Chrome in taskbar area
             print("🖱️ Trying taskbar click...")
             screen_width, screen_height = pyautogui.size()
             taskbar_y = screen_height - 40
             
-            # Try clicking different positions in taskbar
             for x in range(200, 800, 100):
                 pyautogui.click(x, taskbar_y)
                 time.sleep(0.5)
                 
-                # Test if Chrome is now focused
                 try:
                     pyautogui.hotkey('ctrl', 'l')
                     time.sleep(0.3)
@@ -248,7 +211,6 @@ class VoiceBrowserController:
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             
-            # Try to create driver
             self.driver = webdriver.Chrome(options=chrome_options)
             self.driver.implicitly_wait(10)
             print("✅ Selenium WebDriver initialized")
@@ -274,7 +236,7 @@ class VoiceBrowserController:
             try:
                 with self.microphone as source:
                     if not self.listening:
-                        break  # if stop() was called during previous cycle
+                        break  
 
                     if self.search_mode:
                         print("\n🔍 Listening for search query...")
@@ -287,7 +249,7 @@ class VoiceBrowserController:
                         audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=5)
 
                 if not self.listening:
-                    break  # break after finishing recognition if stopped
+                    break 
 
                 print("🔄 Processing speech...")
                 command = self.recognizer.recognize_google(audio).lower()
@@ -311,20 +273,17 @@ class VoiceBrowserController:
         command = command.strip().lower()
         
         try:
-            # Handle search mode
             if self.search_mode:
                 print(f"🔍 Search query captured: '{command}'")
                 self.search_query(command)
                 self.search_mode = False
                 return
-            # Handle find mode (two-step find in active window)
             if self.find_mode:
                 print(f"🔎 Find query captured: '{command}'")
                 self.find_in_active(command)
                 self.find_mode = False
                 return
             
-            # Drive commands: try to detect "open D drive", "open d:", "open d", etc.
             m_drive = (re.search(r'open\s+(?:the\s+)?([a-z])\s*drive', command) or
                        re.search(r'open\s+(?:the\s+)?drive\s+([a-z])', command) or
                        re.search(r'open\s+(?:the\s+)?([a-z]):', command) or
@@ -342,35 +301,27 @@ class VoiceBrowserController:
             if "open vs code" in command or "open vscode" in command or "open visual studio code" in command:
                 self.open_vs_code()
 
-            # Maximize VS Code explicitly
             if ("maximize" in command or "maximise" in command) and ("vs code" in command or "vscode" in command or "visual studio code" in command):
                 self.maximize_vscode()
                 return
 
-            # Minimize VS Code explicitly
             if ("minimize" in command or "minimise" in command) and ("vs code" in command or "vscode" in command or "visual studio code" in command):
                 self.minimize_vscode()
                 return
 
-            # Support possible misrecognitions like 'mini' used for 'find'
             if command.startswith('mini '):
                 q = command.replace('mini ', '', 1).strip()
                 if q:
                     self.find_in_active(q)
                     return
 
-            # Find in active window: explicit patterns or two-step find mode.
-            # Match commands like "find cats", "find in active tab cats", "search this page for cats", or just "find" to enter two-step mode.
             if command.startswith('find '):
-                # treat 'find <query>' as find-in-active
                 query = command.replace('find ', '', 1).strip()
                 if query:
                     self.find_in_active(query)
                     return
 
-            # Phrases that indicate searching inside the active tab/window
             if any(phr in command for phr in ['find in active', 'search in active', 'search in active tab', 'find in active tab', 'find this page', 'search this page', 'find in tab', 'search in tab']):
-                # try to extract query following the phrase
                 m_find = re.search(r'(?:find|search).*?(?:in (?:the )?(?:active|this|current)(?: tab| page)?)[\s:\-]*(.*)', command)
                 if m_find and m_find.group(1).strip():
                     self.find_in_active(m_find.group(1).strip())
@@ -386,29 +337,24 @@ class VoiceBrowserController:
                 return
             
             elif "search" in command and len(command.split()) == 1:
-                # Just "search" command - enter search mode
                 print("🎤 Search mode activated! Say your search query now...")
                 self.search_mode = True
                 return
             
             elif command.startswith("search ") or "search for" in command:
-                # "search [query]" or "search for [query]" in one command
                 if command.startswith("search for "):
                     query = command.replace("search for ", "", 1)
                 else:
                     query = command.replace("search ", "", 1)
                 
-                if query.strip():  # Make sure query is not empty
+                if query.strip():  
                     self.search_query(query)
                 else:
                     print("❓ No search query provided. Try: 'Search cats' or just say 'Search' first")
             
-            # Click commands: supports 'click', 'click here', 'double click', 'right click', 'click at 200 300'
             elif 'click' in command:
-                # Priority: double/right/middle
                 try:
                     if 'double' in command:
-                        # double click at cursor or coordinates
                         m_coord = re.search(r'click(?: at)?\s*(\d+)\s*[ ,]\s*(\d+)', command)
                         if m_coord:
                             x = int(m_coord.group(1)); y = int(m_coord.group(2))
@@ -435,7 +381,6 @@ class VoiceBrowserController:
                         pyautogui.click(button='middle')
                         return
 
-                    # Coordinates specified: 'click at 200 300' or 'click 200,300'
                     m_coord = re.search(r'click(?: at)?\s*(\d+)\s*[ ,]\s*(\d+)', command)
                     if m_coord:
                         x = int(m_coord.group(1)); y = int(m_coord.group(2))
@@ -443,7 +388,6 @@ class VoiceBrowserController:
                         pyautogui.click(x=x, y=y)
                         return
 
-                    # 'click here' or plain 'click' -> click current cursor
                     print("🖱️ Clicking at current cursor position (default)")
                     self.click_at_cursor()
                 except pyautogui.FailSafeException as fe:
@@ -461,8 +405,6 @@ class VoiceBrowserController:
                 self.go_back()
             
             elif "minimize" in command or "minimise" in command:
-                # Handle both US and UK spellings: "minimize" and "minimise"
-                # Check what to minimize: chrome, cursor, file explorer, window, or any window
                 if "chrome" in command:
                     self.minimize_window("chrome")
                 elif "cursor" in command:
@@ -470,15 +412,11 @@ class VoiceBrowserController:
                 elif "file explorer" in command or "explorer" in command:
                     self.minimize_window("explorer")
                 elif "window" in command:
-                    # "minimize window" means any window except Chrome and File Explorer
                     self.minimize_window("other")
                 else:
-                    # Default: minimize active/focused window
                     self.minimize_window("active")
             
             elif "maximize" in command or "maximise" in command:
-                # Handle both US and UK spellings: "maximize" and "maximise"
-                # Check what to maximize: chrome, cursor, file explorer, window, or any window
                 if "chrome" in command:
                     self.maximize_window("chrome")
                 elif "cursor" in command:
@@ -486,10 +424,8 @@ class VoiceBrowserController:
                 elif "file explorer" in command or "explorer" in command:
                     self.maximize_window("explorer")
                 elif "window" in command:
-                    # "maximize window" means any window except Chrome and File Explorer
                     self.maximize_window("other")
                 else:
-                    # Default: maximize active/focused window
                     self.maximize_window("active")
             
             elif "scroll down more" in command or "scroll more down" in command:
@@ -517,11 +453,9 @@ class VoiceBrowserController:
                 self.stop_listening()
             
             elif "search meaning" in command or "meaning of" in command:
-                # Extract word/phrase from command - handles multi-word phrases
                 word_match = re.search(r'(?:meaning of|meaning)\s+(.+)', command, re.IGNORECASE)
                 if word_match:
                     word = word_match.group(1).strip()
-                    # Remove any trailing punctuation
                     word = re.sub(r'[^\w\s]+$', '', word)
                     self.search_word_meaning(word)
                 else:
@@ -531,12 +465,9 @@ class VoiceBrowserController:
                 self.analyze_screen()
             
             elif "summarize" in command or "summarise" in command:
-                # Handle both US and UK spellings: "summarize" and "summarise"
-                # Works with: "summarize document", "summarise page", "summarize this", etc.
                 self.summarize_current_page()
             
             elif command.startswith("ask") or "ask about" in command:
-                # Extract question from command - more flexible pattern
                 question_match = re.search(r'ask\s+(?:about\s+)?(.+)', command, re.IGNORECASE)
                 if question_match:
                     question = question_match.group(1).strip()
@@ -557,7 +488,6 @@ class VoiceBrowserController:
             print("🌐 Opening Chrome...")
             
             if self.chrome_path and os.path.exists(self.chrome_path):
-                # Open Chrome with Google homepage in single window
                 print(f"🚀 Starting Chrome from: {self.chrome_path}")
                 subprocess.Popen([
                     self.chrome_path, 
@@ -566,17 +496,14 @@ class VoiceBrowserController:
                     "https://www.google.com"
                 ])
             else:
-                # Fallback - open Google in default browser
                 print("⚠️ Chrome path not found, using default browser...")
                 webbrowser.open('https://www.google.com')
                 print("✅ Opened Google in default browser!")
                 return
             
-            # Wait for Chrome to fully load
             print("⏰ Waiting for Chrome to load...")
             time.sleep(4)
             
-            # Try to focus the Chrome window
             self.focus_chrome_window()
             
             print("✅ Chrome opened with Google homepage!")
@@ -594,14 +521,12 @@ class VoiceBrowserController:
         """Open Visual Studio Code using common locations or 'code' in PATH"""
         try:
             print("🧑‍💻 Opening VS Code...")
-            # Try 'code' in PATH first
             code_cmd = shutil.which('code')
             if code_cmd:
                 subprocess.Popen([code_cmd])
                 print("✅ VS Code opened using 'code' from PATH")
                 return
 
-            # Try common installation paths
             possible = [
                 os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"),
                 os.path.expandvars(r"%PROGRAMFILES%\Microsoft VS Code\Code.exe"),
@@ -614,7 +539,6 @@ class VoiceBrowserController:
                     print(f"✅ VS Code opened from: {p}")
                     return
 
-            # Fallback: try to open via startfile (opens associated app if available)
             try:
                 os.startfile('code')
                 print("✅ Attempted to open VS Code via os.startfile('code')")
@@ -637,16 +561,13 @@ class VoiceBrowserController:
                 return
 
             path = f"{drive_letter}:/"
-            # Normalize to backslash path for explorer
             explorer_path = f"{drive_letter}:\\"
 
             if os.path.exists(path) or os.path.exists(explorer_path):
                 try:
-                    # Use explorer to open the drive root
                     subprocess.Popen(['explorer', f'{drive_letter}:\\'])
                     print(f"✅ Opened drive {drive_letter}:\\ in File Explorer")
                 except Exception as e:
-                    # Fallback to os.startfile
                     try:
                         os.startfile(f"{drive_letter}:/")
                         print(f"✅ Opened drive {drive_letter}:/ via os.startfile")
@@ -672,11 +593,9 @@ class VoiceBrowserController:
         try:
             input("Press Enter when Chrome is focused and ready...")
         except (OSError, EOFError) as e:
-            # Happens when running without an attached console (WinError 6 etc.)
             print(f"⚠️ No console input available: {e}")
             print("💡 Continuing without manual confirmation.")
         
-        # Test if Chrome is actually focused
         try:
             pyautogui.hotkey('ctrl', 'l')
             time.sleep(0.3)
@@ -692,7 +611,6 @@ class VoiceBrowserController:
         try:
             print(f"🔍 Searching for: '{query}'")
             
-            # Try automatic focus first
             print("🎯 Attempting automatic Chrome focus...")
             focused = False
             for attempt in range(2):
@@ -701,7 +619,6 @@ class VoiceBrowserController:
                     break
                 time.sleep(1)
             
-            # If automatic focus fails, offer manual option
             if not focused:
                 print("⚠️ Automatic Chrome focus failed!")
                 try:
@@ -714,7 +631,6 @@ class VoiceBrowserController:
                     focused = self.manual_chrome_focus_helper()
             
             if focused:
-                # Use PyAutoGUI method for reliable searching
                 self._search_with_pyautogui(query)
             else:
                 print("❌ Cannot search - Chrome not focused!")
@@ -728,7 +644,6 @@ class VoiceBrowserController:
         try:
             print(f"� Searching for: '{query}'")
             
-            # Step 1: Focus Chrome window (CRITICAL!)
             print("📍 Focusing Chrome...")
             focused = False
             for attempt in range(3):
@@ -742,28 +657,23 @@ class VoiceBrowserController:
                 print("❌ Could not focus Chrome! Make sure Chrome is open.")
                 return
             
-            # Step 2: Wait and ensure Chrome is ready
             time.sleep(1.5)
             
-            # Step 3: Focus address bar
             print("📍 Focusing address bar...")
             pyautogui.hotkey('ctrl', 'l')
             time.sleep(1.0)
             
-            # Step 4: Clear anything in address bar
             print("📍 Clearing address bar...")
             pyautogui.hotkey('ctrl', 'a')
             time.sleep(0.5)
             
-            # Step 5: Type search query SLOWLY
             print(f"📍 Typing: '{query}'")
             for char in query:
                 pyautogui.typewrite(char)
-                time.sleep(0.08)  # Slower typing for reliability
+                time.sleep(0.08) 
             
             time.sleep(1.0)
             
-            # Step 6: Press Enter
             print("📍 Pressing Enter...")
             pyautogui.press('enter')
             
@@ -778,17 +688,14 @@ class VoiceBrowserController:
             print(f"🔗 Opening search result #{result_number}...")
             
             if self.driver:
-                # Use Selenium to find and click search results
                 try:
-                    # Wait a moment for page to load
                     time.sleep(2)
                     
-                    # Multiple selectors for different Google layouts
                     selectors = [
-                        f"#search .g:nth-child({result_number}) h3 a",  # Standard Google results
-                        f"#rso .g:nth-child({result_number}) h3 a",     # Alternative layout
-                        f".g:nth-child({result_number}) a[href]:first-of-type",  # Backup selector
-                        f".yuRUbf:nth-child({result_number}) a",        # New Google layout
+                        f"#search .g:nth-child({result_number}) h3 a",  
+                        f"#rso .g:nth-child({result_number}) h3 a",   
+                        f".g:nth-child({result_number}) a[href]:first-of-type", 
+                        f".yuRUbf:nth-child({result_number}) a",      
                     ]
                     
                     link_clicked = False
@@ -796,7 +703,6 @@ class VoiceBrowserController:
                         try:
                             links = self.driver.find_elements(By.CSS_SELECTOR, selector)
                             if links and len(links) >= 1:
-                                # Get the actual result number (adjust for 0-based indexing)
                                 if result_number <= len(links):
                                     link = links[0] if result_number == 1 else links[result_number - 1]
                                     self.driver.execute_script("arguments[0].click();", link)
@@ -807,7 +713,6 @@ class VoiceBrowserController:
                             continue
                     
                     if not link_clicked:
-                        # Fallback: try to find any clickable links in results
                         try:
                             all_links = self.driver.find_elements(By.CSS_SELECTOR, "#search .g h3 a, #rso .g h3 a")
                             if all_links and result_number <= len(all_links):
@@ -824,10 +729,8 @@ class VoiceBrowserController:
                         
                 except Exception as selenium_error:
                     print(f"⚠️ Selenium method failed: {selenium_error}")
-                    # Fall back to PyAutoGUI
                     self._open_result_with_pyautogui(result_number)
             else:
-                # Use PyAutoGUI fallback
                 self._open_result_with_pyautogui(result_number)
                 
         except Exception as e:
@@ -838,19 +741,15 @@ class VoiceBrowserController:
         try:
             print(f"🖱️ Using PyAutoGUI to open result #{result_number}...")
             
-            # Scroll to top of page
             pyautogui.press('home')
             time.sleep(1)
             
-            # Press Tab multiple times to navigate to search results
-            # First result usually takes about 8-10 tabs, subsequent results +3 tabs each
             tab_count = 7 + (result_number - 1) * 3
             
             for i in range(tab_count):
                 pyautogui.press('tab')
                 time.sleep(0.1)
             
-            # Press Enter to open the link
             pyautogui.press('enter')
             print(f"✅ Opened search result #{result_number} with PyAutoGUI!")
             
@@ -866,11 +765,9 @@ class VoiceBrowserController:
         try:
             print("🖱️ Clicking at current cursor position...")
 
-            # Get current cursor position
             current_x, current_y = pyautogui.position()
             print(f"📍 Cursor position: ({current_x}, {current_y})")
 
-            # Perform click with basic safeguards
             pyautogui.click(current_x, current_y)
             print("✅ Clicked successfully!")
 
@@ -885,11 +782,9 @@ class VoiceBrowserController:
             print("📂 Opening new tab...")
             
             if self.driver:
-                # Use Selenium
                 self.driver.execute_script("window.open('');")
                 self.driver.switch_to.window(self.driver.window_handles[-1])
             else:
-                # Use PyAutoGUI
                 pyautogui.hotkey('ctrl', 't')
             
             print("✅ New tab opened!")
@@ -903,11 +798,9 @@ class VoiceBrowserController:
             print("❌ Closing current tab...")
             
             if self.driver and len(self.driver.window_handles) > 1:
-                # Use Selenium
                 self.driver.close()
                 self.driver.switch_to.window(self.driver.window_handles[-1])
             else:
-                # Use PyAutoGUI
                 pyautogui.hotkey('ctrl', 'w')
             
             print("✅ Tab closed!")
@@ -921,11 +814,9 @@ class VoiceBrowserController:
             print("⬅️ Going back to previous page...")
             
             if self.driver:
-                # Use Selenium to go back
                 self.driver.back()
                 print("✅ Navigated back!")
             else:
-                # Use PyAutoGUI - Alt+Left Arrow is the browser back shortcut
                 if self.focus_chrome_window():
                     time.sleep(0.5)
                     pyautogui.hotkey('alt', 'left')
@@ -941,30 +832,22 @@ class VoiceBrowserController:
         try:
             cursor_x, cursor_y = pyautogui.position()
             
-            # Use WindowFromPoint to get the exact window under cursor
             try:
-                # WindowFromPoint gets the window handle at a specific point
-                # It takes a POINT structure
                 point = wintypes.POINT(cursor_x, cursor_y)
                 hwnd = ctypes.windll.user32.WindowFromPoint(point)
                 
-                # Get the top-level parent window (not child controls)
-                # GA_ROOT = 2 means get the root window
                 hwnd = ctypes.windll.user32.GetAncestor(hwnd, 2)
                 
                 if hwnd and win32gui.IsWindowVisible(hwnd):
                     return hwnd
             except Exception as e:
-                # Fallback to enumeration method
                 pass
             
-            # Fallback: enumerate windows and find the one containing the cursor
             def enum_windows_callback(hwnd, windows):
                 if win32gui.IsWindowVisible(hwnd):
                     try:
                         rect = win32gui.GetWindowRect(hwnd)
                         left, top, right, bottom = rect
-                        # Check if cursor is within window bounds
                         if left <= cursor_x <= right and top <= cursor_y <= bottom:
                             windows.append((hwnd, win32gui.GetWindowText(hwnd)))
                     except:
@@ -974,7 +857,6 @@ class VoiceBrowserController:
             windows = []
             win32gui.EnumWindows(enum_windows_callback, windows)
             
-            # Return the topmost window (usually the one we want)
             if windows:
                 return windows[0][0]
             return None
@@ -988,7 +870,6 @@ class VoiceBrowserController:
             if win32gui.IsWindowVisible(hwnd):
                 window_text = win32gui.GetWindowText(hwnd)
                 class_name = win32gui.GetClassName(hwnd)
-                # File Explorer windows typically have "Explorer" in class name or title
                 if "explorer" in window_text.lower() or "CabinetWClass" in class_name or "ExploreWClass" in class_name:
                     windows.append(hwnd)
             return True
@@ -1006,11 +887,9 @@ class VoiceBrowserController:
                     if not window_text:
                         return True
                     lower = window_text.lower()
-                    # VS Code window titles often contain 'visual studio code' or 'vscode'
                     if 'visual studio code' in lower or 'vscode' in lower or ' - code' in lower:
                         windows.append(hwnd)
                         return True
-                    # Fall back: try checking process name for Code.exe
                     try:
                         _, pid = win32process.GetWindowThreadProcessId(hwnd)
                         proc = psutil.Process(pid)
@@ -1059,7 +938,6 @@ class VoiceBrowserController:
 
             try:
                 win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                # Do not force foreground when minimizing
                 time.sleep(0.15)
                 title = win32gui.GetWindowText(hwnd)
                 print(f"✅ VS Code minimized: {title}")
@@ -1084,19 +962,15 @@ class VoiceBrowserController:
                     window_text = win32gui.GetWindowText(hwnd)
                     class_name = win32gui.GetClassName(hwnd)
                     
-                    # Exclude Chrome windows
                     if "chrome" in window_text.lower() or "Google Chrome" in window_text:
                         return True
                     
-                    # Exclude File Explorer windows
                     if "explorer" in window_text.lower() or "CabinetWClass" in class_name or "ExploreWClass" in class_name:
                         return True
                     
-                    # Exclude desktop and taskbar
                     if window_text == "" or "Desktop" in window_text:
                         return True
                     
-                    # This is a valid "other" window
                     windows.append((hwnd, window_text))
                 except:
                     pass
@@ -1105,14 +979,11 @@ class VoiceBrowserController:
         windows = []
         win32gui.EnumWindows(enum_windows_callback, windows)
         
-        # Return the first non-Chrome, non-Explorer window found
-        # Or return the active window if it's not Chrome/Explorer
         active_hwnd = self.get_active_window()
         if active_hwnd:
             active_text = win32gui.GetWindowText(active_hwnd)
             active_class = win32gui.GetClassName(active_hwnd)
             
-            # Check if active window is not Chrome or Explorer
             if (active_hwnd not in [w[0] for w in windows] and 
                 "chrome" not in active_text.lower() and 
                 "Google Chrome" not in active_text and
@@ -1122,7 +993,6 @@ class VoiceBrowserController:
                 active_text != ""):
                 return active_hwnd
         
-        # Return first found window or None
         return windows[0][0] if windows else None
     
     def minimize_window(self, target="active"):
@@ -1154,7 +1024,7 @@ class VoiceBrowserController:
                 if not hwnd:
                     print("❌ No other window found (excluding Chrome and File Explorer)")
                     return
-            else:  # active
+            else:  
                 print("📉 Minimizing active window...")
                 hwnd = self.get_active_window()
                 if not hwnd:
@@ -1198,7 +1068,7 @@ class VoiceBrowserController:
                 if not hwnd:
                     print("❌ No other window found (excluding Chrome and File Explorer)")
                     return
-            else:  # active
+            else:  
                 print("📈 Maximizing active window...")
                 hwnd = self.get_active_window()
                 if not hwnd:
@@ -1218,31 +1088,24 @@ class VoiceBrowserController:
         try:
             print("⬇️ Scrolling down...")
             
-            # Get the currently active window
             active_hwnd = self.get_active_window()
             
             if active_hwnd:
-                # Check if active window is Chrome
                 window_text = win32gui.GetWindowText(active_hwnd)
                 is_chrome = "chrome" in window_text.lower() or "Google Chrome" in window_text
                 
                 if is_chrome:
-                    # Use Page Down multiple times for Chrome/browser windows (works on current tab)
-                    # Press 3 times to ensure at least half a page scrolls (each = ~80-90% viewport)
                     for _ in range(3):
                         pyautogui.press('pagedown')
                         time.sleep(0.08)
                     print("✅ Scrolled down in active window!")
                 else:
-                    # For other windows, use mouse scroll at cursor position with larger value
                     cursor_x, cursor_y = pyautogui.position()
-                    # Scroll more aggressively - 15 scrolls for substantial movement
                     for _ in range(15):
                         pyautogui.scroll(-5, x=cursor_x, y=cursor_y)
                         time.sleep(0.015)
                     print("✅ Scrolled down in active window!")
             else:
-                # Fallback: use mouse scroll at cursor position
                 cursor_x, cursor_y = pyautogui.position()
                 for _ in range(15):
                     pyautogui.scroll(-5, x=cursor_x, y=cursor_y)
@@ -1257,31 +1120,24 @@ class VoiceBrowserController:
         try:
             print("⬆️ Scrolling up...")
             
-            # Get the currently active window
             active_hwnd = self.get_active_window()
             
             if active_hwnd:
-                # Check if active window is Chrome
                 window_text = win32gui.GetWindowText(active_hwnd)
                 is_chrome = "chrome" in window_text.lower() or "Google Chrome" in window_text
                 
                 if is_chrome:
-                    # Use Page Up multiple times for Chrome/browser windows (works on current tab)
-                    # Press 3 times to ensure at least half a page scrolls (each = ~80-90% viewport)
                     for _ in range(3):
                         pyautogui.press('pageup')
                         time.sleep(0.08)
                     print("✅ Scrolled up in active window!")
                 else:
-                    # For other windows, use mouse scroll at cursor position with larger value
                     cursor_x, cursor_y = pyautogui.position()
-                    # Scroll more aggressively - 15 scrolls for substantial movement
                     for _ in range(15):
                         pyautogui.scroll(5, x=cursor_x, y=cursor_y)
                         time.sleep(0.015)
                     print("✅ Scrolled up in active window!")
             else:
-                # Fallback: use mouse scroll at cursor position
                 cursor_x, cursor_y = pyautogui.position()
                 for _ in range(15):
                     pyautogui.scroll(5, x=cursor_x, y=cursor_y)
@@ -1296,31 +1152,24 @@ class VoiceBrowserController:
         try:
             print("⬇️ Scrolling down more (full page)...")
             
-            # Get the currently active window
             active_hwnd = self.get_active_window()
             
             if active_hwnd:
-                # Check if active window is Chrome
                 window_text = win32gui.GetWindowText(active_hwnd)
                 is_chrome = "chrome" in window_text.lower() or "Google Chrome" in window_text
                 
                 if is_chrome:
-                    # Use Page Down multiple times for full page scroll in Chrome
-                    # Press 5-6 times to scroll a full visible page (each = ~80-90% viewport)
                     for _ in range(6):
                         pyautogui.press('pagedown')
                         time.sleep(0.08)
                     print("✅ Scrolled down full page in active window!")
                 else:
-                    # For other windows, use aggressive mouse scroll for full page
                     cursor_x, cursor_y = pyautogui.position()
-                    # Scroll much more aggressively - 30 scrolls for full page movement
                     for _ in range(30):
                         pyautogui.scroll(-8, x=cursor_x, y=cursor_y)
                         time.sleep(0.01)
                     print("✅ Scrolled down full page in active window!")
             else:
-                # Fallback: use aggressive mouse scroll at cursor position
                 cursor_x, cursor_y = pyautogui.position()
                 for _ in range(30):
                     pyautogui.scroll(-8, x=cursor_x, y=cursor_y)
@@ -1335,31 +1184,24 @@ class VoiceBrowserController:
         try:
             print("⬆️ Scrolling up more (full page)...")
             
-            # Get the currently active window
             active_hwnd = self.get_active_window()
             
             if active_hwnd:
-                # Check if active window is Chrome
                 window_text = win32gui.GetWindowText(active_hwnd)
                 is_chrome = "chrome" in window_text.lower() or "Google Chrome" in window_text
                 
                 if is_chrome:
-                    # Use Page Up multiple times for full page scroll in Chrome
-                    # Press 5-6 times to scroll a full visible page (each = ~80-90% viewport)
                     for _ in range(6):
                         pyautogui.press('pageup')
                         time.sleep(0.08)
                     print("✅ Scrolled up full page in active window!")
                 else:
-                    # For other windows, use aggressive mouse scroll for full page
                     cursor_x, cursor_y = pyautogui.position()
-                    # Scroll much more aggressively - 30 scrolls for full page movement
                     for _ in range(30):
                         pyautogui.scroll(8, x=cursor_x, y=cursor_y)
                         time.sleep(0.01)
                     print("✅ Scrolled up full page in active window!")
             else:
-                # Fallback: use aggressive mouse scroll at cursor position
                 cursor_x, cursor_y = pyautogui.position()
                 for _ in range(30):
                     pyautogui.scroll(8, x=cursor_x, y=cursor_y)
@@ -1391,9 +1233,7 @@ class VoiceBrowserController:
             print("▶️ Playing video...")
             
             if self.driver:
-                # Try YouTube specific controls first
                 try:
-                    # Look for YouTube play button
                     play_button = self.driver.find_element(By.CSS_SELECTOR, ".ytp-play-button")
                     if "paused" in play_button.get_attribute("class"):
                         play_button.click()
@@ -1402,7 +1242,6 @@ class VoiceBrowserController:
                 except NoSuchElementException:
                     pass
                 
-                # Try HTML5 video controls
                 try:
                     video = self.driver.find_element(By.TAG_NAME, "video")
                     self.driver.execute_script("arguments[0].play();", video)
@@ -1411,7 +1250,6 @@ class VoiceBrowserController:
                 except NoSuchElementException:
                     pass
             
-            # Fallback to spacebar (universal play/pause)
             pyautogui.press('space')
             print("✅ Video play command sent (spacebar)!")
             
@@ -1426,7 +1264,6 @@ class VoiceBrowserController:
             print("⏸️ Pausing video...")
             
             if self.driver:
-                # Try YouTube specific controls first
                 try:
                     play_button = self.driver.find_element(By.CSS_SELECTOR, ".ytp-play-button")
                     if "paused" not in play_button.get_attribute("class"):
@@ -1436,7 +1273,6 @@ class VoiceBrowserController:
                 except NoSuchElementException:
                     pass
                 
-                # Try HTML5 video controls
                 try:
                     video = self.driver.find_element(By.TAG_NAME, "video")
                     self.driver.execute_script("arguments[0].pause();", video)
@@ -1445,7 +1281,6 @@ class VoiceBrowserController:
                 except NoSuchElementException:
                     pass
             
-            # Fallback to spacebar (universal play/pause)
             pyautogui.press('space')
             print("✅ Video pause command sent (spacebar)!")
             
@@ -1475,7 +1310,6 @@ class VoiceBrowserController:
             except Exception:
                 pass
 
-            # Decide which keystroke to use for search
             is_explorer = False
             try:
                 if 'explorer' in window_text.lower() or 'cabinetwclass' in class_name.lower() or 'explorewclass' in class_name.lower():
@@ -1483,19 +1317,15 @@ class VoiceBrowserController:
             except Exception:
                 is_explorer = False
 
-            # Give visual focus a moment
             time.sleep(0.2)
 
             if is_explorer:
-                # Explorer: F3 focuses search box
                 pyautogui.press('f3')
             else:
-                # Most apps: Ctrl+F
                 pyautogui.hotkey('ctrl', 'f')
 
             time.sleep(0.2)
 
-            # Type the query
             for ch in query:
                 pyautogui.typewrite(ch)
                 time.sleep(0.01)
@@ -1522,12 +1352,10 @@ class VoiceBrowserController:
             
             print("🔍 Analyzing screen with Gemini AI...")
             
-            # Convert screenshot to bytes
             img_bytes = BytesIO()
             screenshot.save(img_bytes, format='PNG')
             img_bytes.seek(0)
             
-            # Use Gemini Pro Vision to analyze the image
             prompt = "Analyze this screenshot and describe what's visible on the screen in detail. Include information about windows, applications, text content, and any important elements."
             
             response = self.gemini_model.generate_content([prompt, screenshot])
@@ -1557,7 +1385,6 @@ class VoiceBrowserController:
             
             print("🔍 Analyzing screen with Gemini AI...")
             
-            # Use Gemini Pro Vision to answer the question
             prompt = f"Answer this question about the screenshot: {question}. Be specific and accurate based on what you can see in the image."
             
             response = self.gemini_model.generate_content([prompt, screenshot])
@@ -1575,7 +1402,6 @@ class VoiceBrowserController:
     def get_current_chrome_url(self):
         """Get the current URL from Chrome browser"""
         try:
-            # Method 1: Use Selenium if available
             if self.driver:
                 try:
                     url = self.driver.current_url
@@ -1584,7 +1410,6 @@ class VoiceBrowserController:
                 except:
                     pass
             
-            # Method 2: Use PyAutoGUI to copy URL from address bar
             print("📍 Getting URL from Chrome address bar...")
             if not self.focus_chrome_window():
                 print("❌ Could not focus Chrome window")
@@ -1592,16 +1417,14 @@ class VoiceBrowserController:
             
             time.sleep(0.5)
             
-            # Focus address bar and copy URL
-            pyautogui.hotkey('ctrl', 'l')  # Focus address bar
+            pyautogui.hotkey('ctrl', 'l') 
             time.sleep(0.3)
-            pyautogui.hotkey('ctrl', 'a')  # Select all
+            pyautogui.hotkey('ctrl', 'a')  
             time.sleep(0.2)
-            pyautogui.hotkey('ctrl', 'c')  # Copy
+            pyautogui.hotkey('ctrl', 'c') 
             time.sleep(0.3)
-            pyautogui.press('escape')  # Close address bar
+            pyautogui.press('escape') 
             
-            # Get URL from clipboard
             try:
                 import win32clipboard
                 win32clipboard.OpenClipboard()
@@ -1634,7 +1457,6 @@ class VoiceBrowserController:
                 print("❌ Could not get current URL. Make sure Chrome is open with a webpage loaded.")
                 return
             
-            # Check if URL is valid (not chrome:// pages or about:blank)
             if url.startswith('chrome://') or url.startswith('about:') or url == 'chrome://newtab/':
                 print("⚠️ Cannot summarize Chrome internal pages. Please navigate to a regular webpage.")
                 return
@@ -1642,7 +1464,6 @@ class VoiceBrowserController:
             print(f"📄 Summarizing webpage: {url}")
             print("⏳ This may take a moment...")
             
-            # Try to fetch webpage content first (more reliable than URL passing)
             try:
                 import requests
                 from bs4 import BeautifulSoup
@@ -1654,27 +1475,21 @@ class VoiceBrowserController:
                 response = requests.get(url, headers=headers, timeout=10)
                 response.raise_for_status()
                 
-                # Parse HTML and extract text content
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                # Remove script and style elements
                 for script in soup(["script", "style", "nav", "header", "footer", "aside"]):
                     script.decompose()
                 
-                # Get text content
                 text_content = soup.get_text()
-                # Clean up whitespace
                 lines = (line.strip() for line in text_content.splitlines())
                 chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
                 text_content = ' '.join(chunk for chunk in chunks if chunk)
                 
-                # Limit content length (Gemini has token limits)
                 if len(text_content) > 50000:
                     text_content = text_content[:50000] + "... [content truncated]"
                 
                 print(f"✅ Fetched {len(text_content)} characters of content")
                 
-                # Use Gemini to summarize the content
                 prompt = f"""Please analyze and summarize the following webpage content from {url}:
 
 {text_content}
@@ -1691,7 +1506,6 @@ Be thorough and accurate in your summary."""
                 summary_text = gemini_response.text
                 
             except ImportError:
-                # Fallback: Try passing URL directly to Gemini (if supported)
                 print("⚠️ requests/BeautifulSoup not available. Trying direct URL...")
                 prompt = f"""Please fetch and analyze the content from this URL: {url}
 
@@ -1710,7 +1524,6 @@ Be thorough and accurate in your summary."""
                 print(f"⚠️ Could not fetch webpage content: {fetch_error}")
                 print("💡 Trying to summarize using URL directly...")
                 
-                # Last resort: pass URL to Gemini and hope it can fetch it
                 prompt = f"""Please fetch and analyze the content from this URL: {url}
 
 Then provide a comprehensive summary of the document/page including:
@@ -1744,21 +1557,17 @@ Be thorough and accurate in your summary."""
         try:
             print(f"📚 Searching meaning of: '{word}'")
             
-            # First, ensure Chrome is open
             if not self.find_chrome_window():
                 print("🌐 Opening Chrome...")
                 self.open_chrome()
                 time.sleep(3)
             
-            # Focus Chrome
             if not self.focus_chrome_window():
                 print("⚠️ Could not focus Chrome. Please ensure Chrome is open.")
                 return
             
-            # Construct search query
             search_query = f"meaning of {word}"
             
-            # Search using the existing search method
             self._search_with_pyautogui(search_query)
             
             print(f"✅ Search completed for meaning of '{word}'")
@@ -1779,7 +1588,7 @@ Be thorough and accurate in your summary."""
     def run(self):
         print("\n🚀 Starting Voice Browser Controller...")
         self.active = True
-        self.listening = True   # ✅ start listening here
+        self.listening = True   
         try:
             self.listen_for_commands()
         except Exception as e:
@@ -1791,10 +1600,9 @@ Be thorough and accurate in your summary."""
     def stop(self):
         """🛑 Gracefully stop voice recognition and browser control"""
         print("🧹 Stopping VoiceBrowserController...")
-        self.listening = False  # signal stop
+        self.listening = False 
 
         try:
-            # stop microphone listening if background thread exists
             if hasattr(self, "stop_listening_fn") and self.stop_listening_fn:
                     self.stop_listening_fn(wait_for_stop=False)
                     print("🎙️ Microphone listener stopped")
@@ -1816,7 +1624,6 @@ def main():
     print("🎤 VOICE-CONTROLLED BROWSER AUTOMATION")
     print("=" * 60)
     
-    # Check dependencies
     print("🔧 Checking dependencies...")
     
     try:
@@ -1840,7 +1647,6 @@ def main():
         print("⚠️ Selenium not found. Install with: pip install selenium")
         print("📝 Will use PyAutoGUI fallback for browser control")
     
-    # Initialize and run controller
     controller = VoiceBrowserController()
     controller.run()
 
