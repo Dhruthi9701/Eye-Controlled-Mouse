@@ -1,8 +1,3 @@
-"""
-Advanced Eye Tracking System - iPhone-inspired techniques for laptop
-Implements sophisticated algorithms for high-precision gaze tracking
-"""
-
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
@@ -26,7 +21,6 @@ should_stop = False
 
 @dataclass
 class GazePoint:
-    """Represents a gaze point with timestamp and confidence"""
     x: float
     y: float
     timestamp: float
@@ -34,39 +28,33 @@ class GazePoint:
     
 @dataclass
 class EyeState:
-    """Complete eye state information"""
     left_iris: Tuple[float, float]
     right_iris: Tuple[float, float]
-    head_pose: Tuple[float, float, float]  
+    head_pose: Tuple[float, float, float]
     blink_ratio: float
     attention_score: float
 
 class KalmanGazeFilter:
-    """Kalman filter for smooth gaze prediction and tracking"""
     
     def __init__(self):
         
         self.state = np.zeros(4, dtype=np.float32)
         self.covariance = np.eye(4, dtype=np.float32) * 1000
         
-        
         self.process_noise = np.eye(4, dtype=np.float32)
-        self.process_noise[0, 0] = 0.1  
-        self.process_noise[1, 1] = 0.1  
-        self.process_noise[2, 2] = 0.5  
-        self.process_noise[3, 3] = 0.5 
-        
+        self.process_noise[0, 0] = 0.1
+        self.process_noise[1, 1] = 0.1
+        self.process_noise[2, 2] = 0.5
+        self.process_noise[3, 3] = 0.5
         
         self.measurement_noise = np.eye(2, dtype=np.float32) * 10
         
-        
         self.transition = np.array([
-            [1, 0, 1, 0],  
-            [0, 1, 0, 1],  
-            [0, 0, 1, 0],  
-            [0, 0, 0, 1]   
+            [1, 0, 1, 0],
+            [0, 1, 0, 1],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
         ], dtype=np.float32)
-        
         
         self.observation = np.array([
             [1, 0, 0, 0],
@@ -76,10 +64,8 @@ class KalmanGazeFilter:
         self.initialized = False
     
     def predict(self) -> Tuple[float, float]:
-        """Predict next gaze position"""
         if not self.initialized:
             return 0, 0
-        
         
         self.state = self.transition @ self.state
         self.covariance = self.transition @ self.covariance @ self.transition.T + self.process_noise
@@ -87,36 +73,29 @@ class KalmanGazeFilter:
         return self.state[0], self.state[1]
     
     def update(self, measurement: Tuple[float, float], confidence: float = 1.0):
-        """Update filter with new measurement"""
         if not self.initialized:
             self.state[0], self.state[1] = measurement
             self.initialized = True
             return
         
-        
         adjusted_noise = self.measurement_noise / max(confidence, 0.1)
-        
         
         innovation = np.array(measurement) - self.observation @ self.state
         innovation_covariance = self.observation @ self.covariance @ self.observation.T + adjusted_noise
         
-        
         gain = self.covariance @ self.observation.T @ np.linalg.inv(innovation_covariance)
-        
         
         self.state = self.state + gain @ innovation
         self.covariance = (np.eye(4) - gain @ self.observation) @ self.covariance
 
 class AttentionDetector:
-    """Detects user attention and focus patterns"""
     
     def __init__(self, window_size: int = 30):
         self.gaze_history = deque(maxlen=window_size)
-        self.fixation_threshold = 25  
-        self.min_fixation_duration = 0.15  
+        self.fixation_threshold = 25
+        self.min_fixation_duration = 0.15
     
     def add_gaze_point(self, point: GazePoint):
-        """Add new gaze point to history"""
         self.gaze_history.append(point)
     
     def get_attention_score(self) -> float:
@@ -208,12 +187,11 @@ class AdvancedEyeTracker:
         self._current_landmark_signature = None
         self._last_adjustment = np.array([0, 0])
         
-        # Double blink detection variables
-        self.blink_history = deque(maxlen=10)  # Store recent blink states
+        self.blink_history = deque(maxlen=10)
         self.last_blink_time = 0
-        self.double_blink_window = 0.6  # 600ms window for double blink (more lenient)
-        self.blink_cooldown = 0.3  # 300ms cooldown after click to prevent multiple clicks
-        self._blink_debug_counter = 0  # For periodic debug output
+        self.double_blink_window = 0.6 
+        self.blink_cooldown = 0.3 
+        self._blink_debug_counter = 0  
         
         print("🚀 Advanced Eye Tracker initialized")
         print(f"📺 Screen: {self.screen_w}x{self.screen_h}")
@@ -230,7 +208,7 @@ class AdvancedEyeTracker:
         if not self.active or self.tracker is None:
             return
         try:
-            self.tracker.update()  # one frame of tracking
+            self.tracker.update()  
         except Exception as e:
             print(">>> Tracker iteration error:", e)
             self.stop()
@@ -239,7 +217,7 @@ class AdvancedEyeTracker:
         if self.tracker:
             print(">>> Stopping eye tracker...")
             try:
-                self.tracker.shutdown()  # release camera
+                self.tracker.shutdown()  
             except Exception as e:
                 print(">>> Tracker shutdown exception:", e)
             self.tracker = None
@@ -247,7 +225,6 @@ class AdvancedEyeTracker:
         print(">>> Eye tracker stopped")
 
     def _init_tracker(self):
-        # Original initialization routine
         from services import some_internal_tracker
         try:
             t = some_internal_tracker.create_advanced_eye_tracking_demo()
@@ -262,7 +239,7 @@ class AdvancedEyeTracker:
         try:
             
             current_dir = os.getcwd()
-            services_dir = os.path.dirname(os.path.abspath(__file__))  # Fixed path resolution
+            services_dir = os.path.dirname(os.path.abspath(__file__))
             
             search_dirs = [current_dir, services_dir]
             calibration_files = []
@@ -423,7 +400,7 @@ class AdvancedEyeTracker:
             eye_landmarks = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
             
             try:
-                iris_center = landmarks.landmark[468]  # Left iris center
+                iris_center = landmarks.landmark[468]  
                 if iris_center.x > 0 and iris_center.y > 0:
                     return float(iris_center.x * w), float(iris_center.y * h)
             except (IndexError, AttributeError):
@@ -498,7 +475,7 @@ class AdvancedEyeTracker:
                 signature['right_iris'] = {
                     'centroid': np.mean(right_iris_array[:, :2], axis=0).tolist(),
                     'std': np.std(right_iris_array[:, :2], axis=0).tolist(),
-                    'area': len(right_iris_points) * 2.0  # Approximate area
+                    'area': len(right_iris_points) * 2.0 
                 }
             
             
@@ -561,43 +538,34 @@ class AdvancedEyeTracker:
         left_mouth = landmarks.landmark[61]
         right_mouth = landmarks.landmark[291]
         
-        # Convert to pixel coordinates
         nose_tip = np.array([nose_tip.x * w, nose_tip.y * h])
         chin = np.array([chin.x * w, chin.y * h])
         left_eye = np.array([left_eye.x * w, left_eye.y * h])
         right_eye = np.array([right_eye.x * w, right_eye.y * h])
         
-        # Calculate rotation angles
         eye_center = (left_eye + right_eye) / 2
         face_center = (nose_tip + chin) / 2
         
-        # Yaw (left-right head turn)
         eye_width = np.linalg.norm(right_eye - left_eye)
-        expected_eye_width = w * 0.15  # Approximate expected width
+        expected_eye_width = w * 0.15 
         yaw = math.atan2(eye_width - expected_eye_width, expected_eye_width) * 180 / math.pi
         
-        # Pitch (up-down head tilt)
         face_height = np.linalg.norm(nose_tip - chin)
         expected_face_height = h * 0.15
         pitch = math.atan2(face_height - expected_face_height, expected_face_height) * 180 / math.pi
         
-        # Roll (head rotation)
         roll = math.atan2(right_eye[1] - left_eye[1], right_eye[0] - left_eye[0]) * 180 / math.pi
         
         return yaw, pitch, roll
     
     def _calculate_blink_ratio(self, landmarks, w: int, h: int) -> float:
         """Calculate eye aspect ratio for blink detection using both eyes"""
-        # Standard EAR calculation uses 6 points per eye
-        # Left eye: outer corner, inner corner, top, bottom (2 vertical points)
-        left_eye_points = [33, 133, 159, 145, 158, 153]  # [outer, inner, top1, bottom1, top2, bottom2]
-        # Right eye: same pattern
+        left_eye_points = [33, 133, 159, 145, 158, 153] 
         right_eye_points = [362, 263, 386, 374, 385, 380]
         
         def calculate_ear(point_indices):
             """Calculate Eye Aspect Ratio using 6 points"""
             try:
-                # Get the 6 key points
                 p1 = landmarks.landmark[point_indices[0]]  # Outer corner
                 p2 = landmarks.landmark[point_indices[1]]  # Inner corner
                 p3 = landmarks.landmark[point_indices[2]]  # Top point 1
@@ -605,64 +573,50 @@ class AdvancedEyeTracker:
                 p5 = landmarks.landmark[point_indices[4]]  # Top point 2
                 p6 = landmarks.landmark[point_indices[5]]  # Bottom point 2
                 
-                # Convert to pixel coordinates
                 def dist(p1, p2):
                     return math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2)
                 
-                # Calculate vertical distances (two different vertical measurements)
                 vertical1 = dist(p3, p4) * h
                 vertical2 = dist(p5, p6) * h
                 
-                # Calculate horizontal distance
                 horizontal = dist(p1, p2) * w
                 
-                # Avoid division by zero
                 if horizontal == 0:
-                    return 0.3  # Default open eye value
+                    return 0.3  
                 
-                # Eye Aspect Ratio: average of two vertical distances divided by horizontal
                 ear = (vertical1 + vertical2) / (2.0 * horizontal)
                 return ear
             except Exception as e:
-                # Return default if calculation fails
                 return 0.3
         
-        # Calculate EAR for both eyes
         left_ear = calculate_ear(left_eye_points)
         right_ear = calculate_ear(right_eye_points)
         
-        # Average both eyes for more reliable detection
         avg_ear = (left_ear + right_ear) / 2.0
         
         return avg_ear
     
     def calculate_gaze_point(self) -> GazePoint:
         """Calculate gaze point using advanced algorithms"""
-        # Average both eyes for better accuracy
         avg_iris_x = (self.eye_state.left_iris[0] + self.eye_state.right_iris[0]) / 2
         avg_iris_y = (self.eye_state.left_iris[1] + self.eye_state.right_iris[1]) / 2
         
-        # Debug eye positions
         if hasattr(self, '_debug_counter2'):
             self._debug_counter2 += 1
         else:
             self._debug_counter2 = 0
         
-        if self._debug_counter2 % 30 == 0:  # Every 30 frames
+        if self._debug_counter2 % 30 == 0:  
             print(f"👁️ DEBUG: left_iris=({self.eye_state.left_iris[0]:.1f},{self.eye_state.left_iris[1]:.1f})")
             print(f"👁️ DEBUG: right_iris=({self.eye_state.right_iris[0]:.1f},{self.eye_state.right_iris[1]:.1f})")
             print(f"👁️ DEBUG: avg_iris=({avg_iris_x:.1f},{avg_iris_y:.1f})")
         
-        # Apply head pose correction
         corrected_x, corrected_y = self._apply_head_pose_correction(avg_iris_x, avg_iris_y)
         
-        # Map to screen coordinates
         screen_x, screen_y = self._map_to_screen(corrected_x, corrected_y)
         
-        # Calculate confidence based on multiple factors
         confidence = self._calculate_confidence()
         
-        # Create gaze point
         gaze_point = GazePoint(
             x=screen_x,
             y=screen_y,
@@ -670,13 +624,10 @@ class AdvancedEyeTracker:
             confidence=confidence
         )
         
-        # Update Kalman filter
         self.kalman_filter.update((screen_x, screen_y), confidence)
         
-        # Get filtered prediction
         filtered_x, filtered_y = self.kalman_filter.predict()
         
-        # Update with filtered coordinates
         gaze_point.x = filtered_x
         gaze_point.y = filtered_y
         
@@ -686,8 +637,7 @@ class AdvancedEyeTracker:
         """Apply head pose correction to iris position"""
         yaw, pitch, roll = self.eye_state.head_pose
         
-        # Correction factors based on head pose
-        yaw_correction = yaw * 2.0  # Adjust sensitivity
+        yaw_correction = yaw * 2.0 
         pitch_correction = pitch * 1.5
         
         corrected_x = iris_x + yaw_correction
@@ -700,17 +650,14 @@ class AdvancedEyeTracker:
         
         if self.is_calibrated and self.calibration_data:
             if self.calibration_type == 'landmark_based':
-                # Use landmark-based mapping
                 if hasattr(self, '_debug_counter') and self._debug_counter % 60 == 0:
                     print(f"🗺️  Using LANDMARK-BASED calibration mapping")
                 return self._apply_landmark_mapping(iris_x, iris_y)
             else:
-                # Use traditional polynomial mapping
                 if hasattr(self, '_debug_counter') and self._debug_counter % 60 == 0:
                     print(f"📐 Using TRADITIONAL calibration mapping")
                 return self._apply_calibrated_mapping(iris_x, iris_y)
         else:
-            # Fallback to basic head+eye tracking
             if hasattr(self, '_debug_counter') and self._debug_counter % 60 == 0:
                 print(f"⚠️  Using BASIC mapping (no calibration)")
             return self._apply_basic_mapping(iris_x, iris_y)
@@ -722,7 +669,6 @@ class AdvancedEyeTracker:
                 print("⚠️  No landmark mappings available, using basic mapping")
                 return self._apply_basic_mapping(iris_x, iris_y)
             
-            # Debug output to confirm landmark mapping is being used
             if hasattr(self, '_debug_counter'):
                 self._debug_counter += 1
             else:
@@ -736,15 +682,12 @@ class AdvancedEyeTracker:
                 else:
                     print(f"⚠️  No current signature available")
             
-            # Find the closest landmark mapping based on iris position
             best_match = None
             min_distance = float('inf')
             
             for mapping_key, mapping_data in self.landmark_mappings.items():
-                # Compare current iris position with stored patterns
                 stored_signature = mapping_data.get('landmark_signature', {})
                 
-                # Calculate similarity score
                 similarity = self._calculate_landmark_similarity(iris_x, iris_y, stored_signature)
                 distance = 1.0 - similarity
                 
@@ -752,30 +695,25 @@ class AdvancedEyeTracker:
                     min_distance = distance
                     best_match = mapping_data
             
-            if best_match and min_distance < 0.8:  # More lenient threshold for better matching
-                # Use the matched screen position
+            if best_match and min_distance < 0.8: 
                 base_screen_pos = best_match['screen_position']
                 
-                # Apply fine adjustment based on landmark signature
                 adjustment = self._calculate_position_adjustment(iris_x, iris_y, best_match)
                 
                 final_x = base_screen_pos[0] + adjustment[0]
                 final_y = base_screen_pos[1] + adjustment[1]
                 
-                # Debug output
                 if self._debug_counter % 60 == 0:
                     print(f"🎯 LANDMARK MATCH: similarity={1.0-min_distance:.3f}")
                     print(f"📍 Base position: ({base_screen_pos[0]:.0f},{base_screen_pos[1]:.0f})")
                     print(f"🎯 Final position: ({final_x:.0f},{final_y:.0f})")
                     print(f"🔧 Adjustment: ({adjustment[0]:.1f},{adjustment[1]:.1f})")
                 
-                # Clamp to screen bounds
                 final_x = max(0, min(final_x, self.screen_w))
                 final_y = max(0, min(final_y, self.screen_h))
                 
                 return final_x, final_y
             else:
-                # No good match found, use basic mapping
                 if self._debug_counter % 60 == 0:
                     print(f"⚠️  No landmark match found (min_distance={min_distance:.3f}), using basic mapping")
                 return self._apply_basic_mapping(iris_x, iris_y)
@@ -797,23 +735,19 @@ class AdvancedEyeTracker:
             total_similarity = 0.0
             comparison_count = 0
             
-            # Compare iris positions (most important)
             for iris_side in ['left_iris', 'right_iris']:
                 if iris_side in current_signature and iris_side in stored_signature:
                     current_centroid = np.array(current_signature[iris_side]['centroid'])
                     stored_centroid = np.array(stored_signature[iris_side]['centroid'])
                     
-                    # Calculate distance between centroids
                     distance = np.linalg.norm(current_centroid - stored_centroid)
                     
-                    # Convert to similarity (closer = more similar)
-                    max_distance = 50  # Adjust based on typical iris movement range
+                    max_distance = 50  
                     similarity = max(0, 1.0 - distance / max_distance)
                     
-                    total_similarity += similarity * 0.4  # High weight for iris
+                    total_similarity += similarity * 0.4 
                     comparison_count += 0.4
             
-            # Compare eye regions
             for eye_region in ['left_eye_region', 'right_eye_region']:
                 if eye_region in current_signature and eye_region in stored_signature:
                     current_centroid = np.array(current_signature[eye_region]['centroid'])
@@ -823,10 +757,9 @@ class AdvancedEyeTracker:
                     max_distance = 30
                     similarity = max(0, 1.0 - distance / max_distance)
                     
-                    total_similarity += similarity * 0.1  # Lower weight for eye regions
+                    total_similarity += similarity * 0.1  
                     comparison_count += 0.1
             
-            # Compare face structure
             if 'face_structure' in current_signature and 'face_structure' in stored_signature:
                 current_centroid = np.array(current_signature['face_structure']['centroid'])
                 stored_centroid = np.array(stored_signature['face_structure']['centroid'])
@@ -835,10 +768,9 @@ class AdvancedEyeTracker:
                 max_distance = 20
                 similarity = max(0, 1.0 - distance / max_distance)
                 
-                total_similarity += similarity * 0.1  # Face structure weight
+                total_similarity += similarity * 0.1 
                 comparison_count += 0.1
             
-            # Calculate final similarity
             if comparison_count > 0:
                 final_similarity = total_similarity / comparison_count
                 return min(1.0, max(0.0, final_similarity))
@@ -855,14 +787,12 @@ class AdvancedEyeTracker:
             if not hasattr(self, '_current_landmark_signature') or not self._current_landmark_signature:
                 return np.array([0, 0])
             
-            # Get the stored landmark signature
             stored_signature = best_match.get('landmark_signature', {})
             current_signature = self._current_landmark_signature
             
             if not stored_signature:
                 return np.array([0, 0])
             
-            # Calculate offset based on iris positions
             adjustment_x = 0
             adjustment_y = 0
             valid_adjustments = 0
@@ -874,12 +804,10 @@ class AdvancedEyeTracker:
                     current_centroid = np.array(current_signature[iris_side]['centroid'])
                     stored_centroid = np.array(stored_signature[iris_side]['centroid'])
                     
-                    # Calculate offset
                     offset = current_centroid - stored_centroid
                     
-                    # Scale offset to screen coordinates with calibrated sensitivity
                     if iris_side == 'left_iris':
-                        sensitivity_x = self.screen_w / 100  # Adjusted sensitivity
+                        sensitivity_x = self.screen_w / 100  
                         sensitivity_y = self.screen_h / 80
                     else:
                         sensitivity_x = self.screen_w / 100
@@ -889,12 +817,10 @@ class AdvancedEyeTracker:
                     adjustment_y += offset[1] * sensitivity_y
                     valid_adjustments += 1
             
-            # Average the adjustments if we have multiple
             if valid_adjustments > 0:
                 adjustment_x /= valid_adjustments
                 adjustment_y /= valid_adjustments
                 
-                # Apply smoothing to prevent jittery movement
                 if hasattr(self, '_last_adjustment'):
                     smoothing = 0.3
                     adjustment_x = self._last_adjustment[0] * (1 - smoothing) + adjustment_x * smoothing
@@ -915,7 +841,6 @@ class AdvancedEyeTracker:
             if not self.landmark_mappings or len(self.landmark_mappings) < 2:
                 return self._apply_basic_mapping(iris_x, iris_y)
             
-            # Find the 3 closest mappings for triangulation
             distances = []
             for mapping_key, mapping_data in self.landmark_mappings.items():
                 signature = mapping_data.get('landmark_signature', {})
@@ -923,17 +848,15 @@ class AdvancedEyeTracker:
                 distance = 1.0 - similarity
                 distances.append((distance, mapping_data))
             
-            # Sort by distance and take top 3
             distances.sort(key=lambda x: x[0])
             closest_mappings = distances[:3]
             
-            # Weighted interpolation based on inverse distance
             total_weight = 0
             weighted_x = 0
             weighted_y = 0
             
             for distance, mapping_data in closest_mappings:
-                if distance < 1e-6:  # Avoid division by zero
+                if distance < 1e-6: 
                     distance = 1e-6
                 
                 weight = 1.0 / distance
@@ -947,7 +870,6 @@ class AdvancedEyeTracker:
                 interpolated_x = weighted_x / total_weight
                 interpolated_y = weighted_y / total_weight
                 
-                # Clamp to screen bounds
                 interpolated_x = max(0, min(interpolated_x, self.screen_w))
                 interpolated_y = max(0, min(interpolated_y, self.screen_h))
                 
@@ -970,7 +892,6 @@ class AdvancedEyeTracker:
             x_coeffs = np.array(transformation['x_coeffs'])
             y_coeffs = np.array(transformation['y_coeffs'])
             
-            # Debug output to confirm calibration is being used
             if hasattr(self, '_debug_counter'):
                 self._debug_counter += 1
             else:
@@ -980,7 +901,6 @@ class AdvancedEyeTracker:
                 print(f"🎯 USING CALIBRATED MAPPING: iris=({iris_x:.1f},{iris_y:.1f})")
                 print(f"🔧 Transformation type: {transformation.get('transformation_type', 'polynomial')}")
             
-            # Apply normalization if available
             if 'normalization' in transformation:
                 eye_mean = np.array(transformation['normalization']['eye_mean'])
                 eye_std = np.array(transformation['normalization']['eye_std'])
@@ -989,19 +909,15 @@ class AdvancedEyeTracker:
             else:
                 iris_normalized = np.array([iris_x, iris_y])
             
-            # Create feature vector based on transformation type
             transformation_type = transformation.get('transformation_type', 'polynomial')
             
             if transformation_type == 'linear':
-                # Linear transformation: [1, x, y]
                 features = np.array([1, iris_normalized[0], iris_normalized[1]])
-                # Adjust coefficients if needed
                 if len(x_coeffs) > 3:
                     x_coeffs = x_coeffs[:3]
                 if len(y_coeffs) > 3:
                     y_coeffs = y_coeffs[:3]
             else:
-                # Polynomial transformation: [1, x, y, x^2, y^2, x*y]
                 features = np.array([
                     1,
                     iris_normalized[0],
@@ -1011,14 +927,12 @@ class AdvancedEyeTracker:
                     iris_normalized[0] * iris_normalized[1]
                 ])
             
-            # Apply transformation
             screen_x = np.dot(features, x_coeffs)
             screen_y = np.dot(features, y_coeffs)
             
             if self._debug_counter % 60 == 0:
                 print(f"🎯 CALIBRATED RESULT: screen=({screen_x:.1f},{screen_y:.1f})")
             
-            # Clamp to screen bounds
             screen_x = max(0, min(screen_x, self.screen_w))
             screen_y = max(0, min(screen_y, self.screen_h))
             
@@ -1031,32 +945,25 @@ class AdvancedEyeTracker:
     
     def _apply_basic_mapping(self, iris_x: float, iris_y: float) -> Tuple[float, float]:
         """Apply SIMPLIFIED camera-to-screen coordinate mapping to fix cursor disappearing"""
-        # Simple mapping approach that should work reliably
         camera_width = 640
         camera_height = 480
         
-        # Use fixed center for now to avoid complexity
         center_x = camera_width / 2   # 320
         center_y = camera_height / 2  # 240
         
         print(f"🎯 BASIC MAPPING: iris=({iris_x:.1f},{iris_y:.1f}) camera_center=({center_x},{center_y})")
         
-        # Calculate offset from center in camera coordinates  
         offset_x = iris_x - center_x
         offset_y = iris_y - center_y
         
         print(f"   Camera offset: ({offset_x:.1f},{offset_y:.1f})")
         
-        # Simple proportional mapping to screen coordinates
-        # Map camera range to screen range with sensitivity scaling
-        sensitivity_x = 4.0  # How sensitive horizontal movement is
-        sensitivity_y = 3.0  # How sensitive vertical movement is
+        sensitivity_x = 4.0  
+        sensitivity_y = 3.0  
         
-        # Map to screen coordinates from center
         screen_x = self.screen_w / 2 + (offset_x * sensitivity_x)
         screen_y = self.screen_h / 2 + (offset_y * sensitivity_y)
         
-        # Ensure coordinates are within screen bounds with margin
         margin = 10
         screen_x = max(margin, min(screen_x, self.screen_w - margin))
         screen_y = max(margin, min(screen_y, self.screen_h - margin))
@@ -1069,20 +976,17 @@ class AdvancedEyeTracker:
         """Calculate tracking confidence based on multiple factors"""
         confidence = 1.0
         
-        # Reduce confidence if head pose is extreme
         yaw, pitch, roll = self.eye_state.head_pose
         if abs(yaw) > 30 or abs(pitch) > 20:
             confidence *= 0.7
         
-        # Reduce confidence if blinking
-        if self.eye_state.blink_ratio < 0.2:  # Likely blinking
+        if self.eye_state.blink_ratio < 0.2: 
             confidence *= 0.3
         
-        # Consider iris detection quality
         left_x, left_y = self.eye_state.left_iris
         right_x, right_y = self.eye_state.right_iris
         
-        if left_x == 0 or right_x == 0:  # Poor detection
+        if left_x == 0 or right_x == 0: 
             confidence *= 0.5
         
         return max(confidence, 0.1)
@@ -1092,7 +996,6 @@ class AdvancedEyeTracker:
         self.attention_detector.add_gaze_point(self.current_gaze)
         attention = self.attention_detector.get_attention_score()
         
-        # Update eye state
         self.eye_state = EyeState(
             left_iris=self.eye_state.left_iris,
             right_iris=self.eye_state.right_iris,
@@ -1103,11 +1006,10 @@ class AdvancedEyeTracker:
     
     def control_mouse(self, gaze_point: GazePoint):
         """Control mouse with adaptive smoothing for better accuracy"""
-        if gaze_point.confidence < 0.2:  # More lenient confidence threshold
+        if gaze_point.confidence < 0.2: 
             print(f"⚠️  Skipping low confidence gaze: {gaze_point.confidence:.3f}")
-            return  # Skip low-confidence points
+            return  
         
-        # Enhanced debugging - always show what we're trying to do
         print(f"🎯 MOUSE CONTROL: gaze=({gaze_point.x:.1f},{gaze_point.y:.1f}) confidence={gaze_point.confidence:.3f}")
         
         try:
@@ -1117,10 +1019,8 @@ class AdvancedEyeTracker:
             print(f"❌ Error getting current mouse position: {e}")
             return
         
-        # Calculate distance to target
         distance = math.sqrt((gaze_point.x - current_x)**2 + (gaze_point.y - current_y)**2)
         
-        # Adaptive smoothing based on distance and confidence
         if distance < 20:  # Very close - high precision
             smoothing = 0.15 * gaze_point.confidence
         elif distance < 50:  # Close - medium precision
@@ -1130,10 +1030,8 @@ class AdvancedEyeTracker:
         else:  # Far distance - quick movement
             smoothing = 0.6 * gaze_point.confidence
         
-        # Apply minimum smoothing to prevent jitter
         smoothing = max(smoothing, 0.1)
         
-        # Calculate smooth movement with optional sensitivity multiplier
         sensitivity = getattr(self, 'eye_sensitivity_multiplier', 1.0)
         delta_x = (gaze_point.x - current_x) * sensitivity
         delta_y = (gaze_point.y - current_y) * sensitivity
@@ -1141,34 +1039,27 @@ class AdvancedEyeTracker:
         smooth_x = current_x + delta_x * smoothing
         smooth_y = current_y + delta_y * smoothing
 
-        # Add acceleration for larger movements
         if distance > 100:
-            # Reduce smoothing for faster movement to distant targets
             acceleration_factor = min(distance / 200, 2.0)
             smooth_x = current_x + delta_x * smoothing * acceleration_factor
             smooth_y = current_y + delta_y * smoothing * acceleration_factor
         
-        # Ensure coordinates are within screen bounds
         smooth_x = max(0, min(smooth_x, self.screen_w - 1))
         smooth_y = max(0, min(smooth_y, self.screen_h - 1))
         
-        # Move mouse with enhanced error handling
         try:
             print(f"🖱️  MOVING CURSOR: ({current_x},{current_y}) -> ({int(smooth_x)},{int(smooth_y)}) [distance={distance:.1f}]")
             pyautogui.moveTo(int(smooth_x), int(smooth_y), duration=0)
             
-            # Verify the move worked
             new_x, new_y = pyautogui.position()
             print(f"✅ CURSOR MOVED: now at ({new_x},{new_y})")
             
-            # Store last position for tracking
             self.last_mouse_pos = (smooth_x, smooth_y)
                 
         except Exception as e:
             print(f"❌ Error moving mouse: {e}")
             print(f"   Attempted coordinates: ({int(smooth_x)},{int(smooth_y)})")
             print(f"   Screen bounds: {self.screen_w}x{self.screen_h}")
-            # Try alternative method
             try:
                 import ctypes
                 ctypes.windll.user32.SetCursorPos(int(smooth_x), int(smooth_y))
@@ -1178,7 +1069,6 @@ class AdvancedEyeTracker:
     
     def is_gaze_within_screen_boundary(self, gaze_point: GazePoint) -> bool:
         """Determine if current gaze is within screen viewing area"""
-        # Define expanded boundary area (allows some tolerance)
         margin_x = self.screen_w * self.screen_boundary_margin
         margin_y = self.screen_h * self.screen_boundary_margin
         
@@ -1187,27 +1077,23 @@ class AdvancedEyeTracker:
         boundary_top = -margin_y
         boundary_bottom = self.screen_h + margin_y
         
-        # Check if gaze is within expanded screen boundary
         within_boundary = (boundary_left <= gaze_point.x <= boundary_right and 
                           boundary_top <= gaze_point.y <= boundary_bottom)
         
-        # Additional check: analyze gaze stability
         if len(self.gaze_history) >= 10:
             engagement = self.estimate_screen_engagement()
             if not engagement:
-                return False  # User seems to be looking away
+                return False  # User looking away
         
         return within_boundary
     
     def estimate_screen_engagement(self) -> bool:
         """Estimate if user is engaged with laptop screen based on gaze patterns"""
         if len(self.gaze_history) < 10:
-            return True  # Default to engaged if insufficient data
+            return True  
         
-        # Analyze recent gaze stability and patterns
         recent_positions = list(self.gaze_history)[-10:]
         
-        # Calculate gaze variance (lower = more focused/stable)
         x_positions = [pos[0] for pos in recent_positions]
         y_positions = [pos[1] for pos in recent_positions]
         
@@ -1215,9 +1101,7 @@ class AdvancedEyeTracker:
         variance_y = np.var(y_positions)
         total_variance = variance_x + variance_y
         
-        # High variance suggests looking around (possibly away from screen)
-        # Low variance suggests focused attention (likely on screen)
-        engagement_threshold = 2000  # Adjust based on testing
+        engagement_threshold = 2000 
         
         is_engaged = total_variance < engagement_threshold
         
@@ -1225,18 +1109,15 @@ class AdvancedEyeTracker:
     
     def _are_coordinates_reasonable(self, x: float, y: float) -> bool:
         """Check if screen coordinates are reasonable"""
-        # More conservative bounds checking
-        margin_factor = 1.5  # Allow 50% overshoot
+        margin_factor = 1.5 
         max_x = self.screen_w * margin_factor
         max_y = self.screen_h * margin_factor
         min_x = -self.screen_w * 0.5
         min_y = -self.screen_h * 0.5
         
-        # Check for finite values
         if not (np.isfinite(x) and np.isfinite(y)):
             return False
         
-        # Check bounds
         if x < min_x or x > max_x or y < min_y or y > max_y:
             return False
         
@@ -1246,61 +1127,44 @@ class AdvancedEyeTracker:
         """Detect double blink for clicking"""
         current_time = time.time()
         
-        # Check if we're in cooldown period (prevent multiple clicks)
         if current_time - self.last_blink_time < self.blink_cooldown:
             return False
         
-        # Detect if eyes are currently closed (blinking)
-        # Adjusted threshold: normal eyes open ~0.25-0.35, blinking <0.22
-        is_blinking = self.eye_state.blink_ratio < 0.22  # More sensitive threshold
+        is_blinking = self.eye_state.blink_ratio < 0.22  
         
-        # Debug output (every 30 frames to avoid spam)
         self._blink_debug_counter += 1
         if self._blink_debug_counter % 30 == 0:
             print(f"👁️  Blink Debug: EAR={self.eye_state.blink_ratio:.3f}, is_blinking={is_blinking}, history_size={len(self.blink_history)}")
         
-        # Add current blink state to history
         self.blink_history.append({
             'is_blinking': is_blinking,
             'time': current_time,
             'blink_ratio': self.eye_state.blink_ratio
         })
         
-        # Need at least 3 entries to detect double blink pattern
         if len(self.blink_history) < 3:
             return False
         
-        # Get recent history (check last 5 states for more flexibility)
         recent = list(self.blink_history)[-5:]
         
-        # Look for double blink pattern: blink -> open -> blink
-        # More flexible: allow some frames in between
         blink_times = []
         for i, state in enumerate(recent):
             if state['is_blinking']:
                 blink_times.append((i, state['time']))
         
-        # Need at least 2 blinks
         if len(blink_times) >= 2:
-            # Check if the last two blinks are within the time window
             last_blink_idx, last_blink_time = blink_times[-1]
             second_last_blink_idx, second_last_blink_time = blink_times[-2]
             
             time_between = last_blink_time - second_last_blink_time
             
-            # Check if blinks are close enough in time (double blink window)
             if time_between < self.double_blink_window:
-                # Verify there's an "open" state between them (not consecutive frames)
-                # This ensures it's a double blink, not a long single blink
                 frames_between = last_blink_idx - second_last_blink_idx
-                if frames_between >= 2:  # At least one frame of eyes open between blinks
-                    # Double blink detected!
+                if frames_between >= 2:  
                     self.last_blink_time = current_time
-                    # Clear history after detection to prevent re-triggering
                     self.blink_history.clear()
                     return True
                 elif frames_between == 1 and time_between < 0.3:
-                    # Very quick double blink (consecutive frames but fast)
                     self.last_blink_time = current_time
                     self.blink_history.clear()
                     return True
@@ -1331,7 +1195,6 @@ class AdvancedEyeTracker:
             'screen_resolution': [self.screen_w, self.screen_h]
         }
         
-        # Save to the services directory
         try:
             services_dir = os.path.dirname(os.path.abspath(__file__))
             filepath = os.path.join(services_dir, filename)
@@ -1342,7 +1205,6 @@ class AdvancedEyeTracker:
             print(f"💾 Session data saved to {filepath}")
         except Exception as e:
             print(f"❌ Failed to save session data: {e}")
-            # Fallback to current directory if services_dir fails
             try:
                 with open(filename, 'w') as f:
                     json.dump(session_data, f, indent=2)
@@ -1398,16 +1260,12 @@ def create_advanced_eye_tracking_demo():
     print("⌨️  Controls: ESC=exit, SPACE=toggle mouse, C=toggle calibration, M=toggle mirror")
     print("             R=reload calibration, Z=reset center, Q=quick calibration, I=help")
     
-    # Initialize tracker
     tracker = AdvancedEyeTracker()
-    # Small sensitivity boost applied only while eye-mouse is active. Increase slightly
-    # so cursor responds a bit faster to eye movements. Tune this value as needed.
     try:
-        tracker.eye_sensitivity_multiplier = 1.25  # small, conservative increase (5%)
+        tracker.eye_sensitivity_multiplier = 1.25  
     except Exception:
         pass
     
-    # Camera setup with better error handling
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("❌ Error: Could not open camera")
@@ -1422,27 +1280,20 @@ def create_advanced_eye_tracking_demo():
     print("🖱️  PyAutoGUI failsafe disabled for smooth mouse control")
     print("💡 If cursor disappears, check Windows mouse settings")
     
-    # Demo state
     mouse_control_enabled = True
     frame_count = 0
-    # Try to read mirror preference from the calibrator module so both preview
-    # and calibration use the same orientation by default.
     try:
         from services import pure_eye_calibrator
         mirror_camera = bool(getattr(pure_eye_calibrator, 'mirror_preview', False))
     except Exception:
-        mirror_camera = False  # Keep FALSE to match calibrator coordinate system
+        mirror_camera = False  
 
     print(f"📷 Camera mirroring: {'ON' if mirror_camera else 'OFF'} (matches calibrator)")
-    # Visualization mode for camera preview: when True the on-screen gaze marker
-    # will be placed at the detected eye (iris) position instead of the mapped
-    # screen location. This helps visually check eye detection alignment.
     viz_place_on_eye = True
     print("   Press 'M' to toggle camera mirroring")
     print("   ⚠️  Note: Calibrator uses non-mirrored coordinates")
     
     try:
-        # Import MediaPipe
         import mediapipe as mp
         
         mp_face_mesh = mp.solutions.face_mesh
@@ -1453,8 +1304,8 @@ def create_advanced_eye_tracking_demo():
             face_mesh = mp_face_mesh.FaceMesh(
                 max_num_faces=1,
                 refine_landmarks=True,
-                min_detection_confidence=0.3,  # Lower for continuous detection
-                min_tracking_confidence=0.2   # Lower for continuous tracking
+                min_detection_confidence=0.3, 
+                min_tracking_confidence=0.2  
             )
         except Exception as mp_error:
             error_msg = str(mp_error)
@@ -1478,11 +1329,9 @@ def create_advanced_eye_tracking_demo():
         print(f"❌ MediaPipe error: {e}")
         face_mesh = None
         
-        # Demo mode with simulated eye movement
         while True:
             frame_count += 1
             
-            # Simulate gaze point
             t = time.time()
             demo_x = tracker.screen_w/2 + 200 * math.sin(t)
             demo_y = tracker.screen_h/2 + 100 * math.cos(t * 1.5)
@@ -1494,14 +1343,12 @@ def create_advanced_eye_tracking_demo():
             if mouse_control_enabled:
                 tracker.control_mouse(demo_gaze)
             
-            # Display metrics
             if frame_count % 30 == 0:
                 metrics = tracker.get_performance_metrics()
                 print(f"📊 Attention: {metrics['attention_score']:.2f}, Confidence: {metrics['confidence']:.2f}")
             
-            # Check for exit
             key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # ESC
+            if key == 27: 
                 break
             elif key == ord(' '):
                 mouse_control_enabled = not mouse_control_enabled
@@ -1509,19 +1356,17 @@ def create_advanced_eye_tracking_demo():
             elif key == ord('s'):
                 tracker.save_usage_data()
             
-            time.sleep(0.033)  # ~30 FPS
+            time.sleep(0.033) 
         
         print("✅ Advanced Eye Tracking Demo completed")
         return
     
-    # Main tracking loop with simplified detection
     try:
         print("🎥 Starting camera capture...")
         global should_stop
-        should_stop = False  # Reset on start
+        should_stop = False 
         
         while True:
-            # Check for stop flag - allows external stopping
             if should_stop:
                 print("🛑 Stop flag detected, exiting...")
                 break
@@ -1534,32 +1379,25 @@ def create_advanced_eye_tracking_demo():
             frame_count += 1
             frame_time = time.time()
             
-            # Flip frame horizontally for mirror effect (optional)
             if mirror_camera:
                 frame = cv2.flip(frame, 1)
             
-            # Process frame
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = face_mesh.process(rgb_frame)
             
             if results.multi_face_landmarks:
-                # Process the first detected face
                 landmarks = results.multi_face_landmarks[0]
                 
-                # Draw face mesh with iris connections (like calibration window)
                 h, w = frame.shape[:2]
                 try:
-                    # Draw iris regions with complete analysis (same as calibration)
                     mp_drawing.draw_landmarks(
                         frame, landmarks, mp_face_mesh.FACEMESH_IRISES,
                         landmark_drawing_spec=None,
                         connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style())
                     
-                    # Draw eye region boundaries
                     left_eye_outline = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
                     right_eye_outline = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
                     
-                    # Draw left eye outline
                     left_points = []
                     for idx in left_eye_outline:
                         if idx < len(landmarks.landmark):
@@ -1570,7 +1408,6 @@ def create_advanced_eye_tracking_demo():
                         left_points = np.array(left_points, dtype=np.int32)
                         cv2.polylines(frame, [left_points], True, (255, 0, 255), 1)
                     
-                    # Draw right eye outline
                     right_points = []
                     for idx in right_eye_outline:
                         if idx < len(landmarks.landmark):
@@ -1581,7 +1418,6 @@ def create_advanced_eye_tracking_demo():
                         right_points = np.array(right_points, dtype=np.int32)
                         cv2.polylines(frame, [right_points], True, (255, 0, 255), 1)
                     
-                    # Draw individual iris landmarks for precision feedback
                     iris_landmarks = [469, 470, 471, 472, 474, 475, 476, 477]
                     for idx in iris_landmarks:
                         if idx < len(landmarks.landmark):
@@ -1589,46 +1425,36 @@ def create_advanced_eye_tracking_demo():
                             px, py = int(point.x * w), int(point.y * h)
                             cv2.circle(frame, (px, py), 3, (255, 255, 0), -1)
                 except Exception as e:
-                    # Fail silently if drawing fails
                     pass
                 
-                # Process landmarks and calculate gaze
                 if tracker.process_face_landmarks(landmarks, frame.shape):
                     gaze_point = tracker.calculate_gaze_point()
                     tracker.current_gaze = gaze_point
                     tracker.update_attention_score()
                     
-                    # Control mouse with lower confidence threshold
                     if mouse_control_enabled and gaze_point.confidence > 0.2:
                         tracker.control_mouse(gaze_point)
                     
-                    # Double blink detection for clicking
                     if mouse_control_enabled:
-                        # Check for double blink
                         if tracker.detect_blink_click():
                             try:
                                 current_mouse_x, current_mouse_y = pyautogui.position()
                                 pyautogui.click(current_mouse_x, current_mouse_y)
                                 print(f"🖱️  DOUBLE BLINK CLICK at ({current_mouse_x}, {current_mouse_y})")
-                                # Visual feedback on frame
                                 cv2.putText(frame, "CLICK!", (frame.shape[1] - 150, 50), 
                                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 3)
                             except Exception as e:
                                 print(f"❌ Error clicking: {e}")
                         
-                        # Debug: Show blink history count
                         if hasattr(tracker, 'blink_history') and len(tracker.blink_history) > 0:
                             recent_blinks = [b['is_blinking'] for b in list(tracker.blink_history)[-3:]]
                             if any(recent_blinks):
-                                # Show debug info on frame (only when blinking detected)
                                 cv2.putText(frame, f"Blink History: {len(tracker.blink_history)}", 
                                            (10, 290), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
                     
-                    # Enhanced tracking info with visual feedback
                     cv2.putText(frame, f"Gaze: ({gaze_point.x:.0f}, {gaze_point.y:.0f})", 
                                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                     
-                    # Color-coded confidence
                     conf_color = (0, 255, 0) if gaze_point.confidence > 0.7 else (0, 255, 255) if gaze_point.confidence > 0.4 else (0, 0, 255)
                     cv2.putText(frame, f"Confidence: {gaze_point.confidence:.2f}", 
                                (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, conf_color, 2)
@@ -1638,7 +1464,6 @@ def create_advanced_eye_tracking_demo():
                     cv2.putText(frame, f"Mouse Control: {mouse_status}", 
                                (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, mouse_color, 2)
                     
-                    # Show current mouse position for debugging
                     try:
                         mouse_x, mouse_y = pyautogui.position()
                         cv2.putText(frame, f"Mouse: ({mouse_x},{mouse_y})", 
@@ -1647,64 +1472,49 @@ def create_advanced_eye_tracking_demo():
                         cv2.putText(frame, "Mouse: ERROR", 
                                    (10, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
                     
-                    # Show eye positions for debugging with camera coordinate info
                     left_x, left_y = tracker.eye_state.left_iris
                     right_x, right_y = tracker.eye_state.right_iris
                     cv2.putText(frame, f"Camera: L({left_x:.0f},{left_y:.0f}) R({right_x:.0f},{right_y:.0f})", 
                                (10, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
                     
-                    # Show screen coordinates mapping
                     cv2.putText(frame, f"Screen: ({gaze_point.x:.0f},{gaze_point.y:.0f}) of {tracker.screen_w}x{tracker.screen_h}", 
                                (10, 200), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
                     
-                    # Visual crosshair for gaze direction
                     if gaze_point.confidence > 0.3:
                         try:
                             if viz_place_on_eye:
-                                # Use detected iris (camera coordinates) for visualization
                                 left_x, left_y = tracker.eye_state.left_iris
                                 right_x, right_y = tracker.eye_state.right_iris
-                                # If both eyes are available, center the marker between them
                                 if left_x and left_y and right_x and right_y:
                                     viz_x = int((left_x + right_x) / 2)
                                     viz_y = int((left_y + right_y) / 2)
-                                # Prefer left eye if only left is available
                                 elif left_x and left_y:
                                     viz_x = int(left_x)
                                     viz_y = int(left_y)
-                                # Else use right eye if only right is available
                                 elif right_x and right_y:
                                     viz_x = int(right_x)
                                     viz_y = int(right_y)
                                 else:
-                                    # Fall back to mapped screen coordinate visualization
                                     viz_x = int((gaze_point.x / tracker.screen_w) * frame.shape[1])
                                     viz_y = int((gaze_point.y / tracker.screen_h) * frame.shape[0])
                             else:
-                                # Scale gaze point to frame coordinates for visualization
                                 viz_x = int((gaze_point.x / tracker.screen_w) * frame.shape[1])
                                 viz_y = int((gaze_point.y / tracker.screen_h) * frame.shape[0])
 
-                            # Clamp to frame bounds
                             viz_x = max(5, min(viz_x, frame.shape[1] - 5))
                             viz_y = max(5, min(viz_y, frame.shape[0] - 5))
 
-                            # Draw gaze point indicator (matching calibration style)
                             if viz_place_on_eye:
-                                # Yellow circle with white center (like calibration)
                                 cv2.circle(frame, (viz_x, viz_y), 8, (0, 255, 255), -1)  # Yellow outer
                                 cv2.circle(frame, (viz_x, viz_y), 5, (255, 255, 255), -1)  # White center
                                 cv2.circle(frame, (viz_x, viz_y), 3, (0, 0, 0), -1)  # Black dot
                             else:
-                                # Yellow circle with white center for screen-mapped visualization
                                 cv2.circle(frame, (viz_x, viz_y), 8, (0, 255, 255), -1)  # Yellow outer
                                 cv2.circle(frame, (viz_x, viz_y), 5, (255, 255, 255), -1)  # White center
                                 cv2.circle(frame, (viz_x, viz_y), 3, (0, 0, 0), -1)  # Black dot
                         except Exception as e:
-                            # Fail silently on visualization errors
                             pass
                     
-                    # Show calibration status with color coding
                     if tracker.is_calibrated:
                         mode_text = f"Mode: {tracker.calibration_type.upper()} CALIBRATED"
                         mode_color = (0, 255, 0)  # Green for calibrated
@@ -1715,13 +1525,11 @@ def create_advanced_eye_tracking_demo():
                     cv2.putText(frame, mode_text, 
                                (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, mode_color, 2)
                     
-                    # Show calibration quality if available
                     if tracker.calibration_data:
                         quality_color = (0, 255, 0) if tracker.calibration_quality in ['excellent', 'good'] else (0, 255, 255) if tracker.calibration_quality == 'fair' else (0, 0, 255)
                         cv2.putText(frame, f"Quality: {tracker.calibration_quality.upper()}", 
                                    (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.6, quality_color, 2)
                     
-                    # Show blink detection status
                     blink_status = "Blinking" if tracker.eye_state.blink_ratio < 0.22 else "Eyes Open"
                     blink_color = (0, 0, 255) if tracker.eye_state.blink_ratio < 0.22 else (0, 255, 0)
                     cv2.putText(frame, f"Blink: {blink_status} (EAR: {tracker.eye_state.blink_ratio:.3f})", 
@@ -1729,26 +1537,21 @@ def create_advanced_eye_tracking_demo():
                     cv2.putText(frame, "Double blink to click", 
                                (10, 270), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                     
-                    # Show tracking mode status (like calibration window)
                     cv2.putText(frame, "FULL FACE MESH TRACKING", 
                                (10, frame.shape[0] - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
                     cv2.putText(frame, "Ultra-High Sensitivity Mode", 
                                (10, frame.shape[0] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                     
-                    # Show helpful tips
                     cv2.putText(frame, "Tips: Double blink to click, Z=reset center, I=help", 
                                (10, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             else:
-                # No face detected
                 cv2.putText(frame, "No face detected", 
                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                 cv2.putText(frame, "Look at the camera", 
                            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             
-            # Show camera feed
             cv2.imshow('Eye Tracking', frame)
             
-            # Handle keyboard input
             key = cv2.waitKey(1) & 0xFF
             if key == 27:  # ESC to exit
                 print("👋 Exiting...")
@@ -1801,7 +1604,6 @@ def create_advanced_eye_tracking_demo():
                     print("   • No calibration - using basic camera-to-screen mapping")
                     print("   • Camera coordinate range is properly scaled to screen range")
             
-            # Show FPS occasionally
             if frame_count % 30 == 0:
                 fps = 30.0 / max(time.time() - frame_time, 0.001)
                 print(f"📊 FPS: {fps:.1f}, Mouse: {'ON' if mouse_control_enabled else 'OFF'}")
@@ -1818,7 +1620,7 @@ def create_advanced_eye_tracking_demo():
     
     finally:
         
-        should_stop = False  # Reset stop flag
+        should_stop = False
         cap.release()
         cv2.destroyAllWindows()
         tracker.save_usage_data()
