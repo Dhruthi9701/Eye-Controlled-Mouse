@@ -7,8 +7,6 @@ import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-
-# ✅ Suppress TensorFlow & absl warnings safely
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 try:
     import absl.logging
@@ -18,10 +16,8 @@ try:
 except Exception:
     pass
 
-# ✅ Initialize Flask
 app = Flask(__name__)
 
-# ✅ Handle OPTIONS preflight at APP LEVEL (before blueprint registration)
 @app.before_request
 def handle_preflight():
     """Handle OPTIONS preflight requests for all routes"""
@@ -34,7 +30,6 @@ def handle_preflight():
         response.headers.add("Access-Control-Max-Age", "3600")
         return response
 
-# ✅ Enable CORS with automatic OPTIONS handling
 CORS(
     app,
     origins=["http://localhost:3000"],
@@ -44,10 +39,8 @@ CORS(
     automatic_options=True
 )
 
-# ✅ Register blueprint
 app.register_blueprint(control_bp, url_prefix="/control")
 
-# ✅ Initialize SocketIO
 socketio = SocketIO(
     app,
     cors_allowed_origins=["http://localhost:3000"],
