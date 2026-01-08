@@ -7,17 +7,14 @@ import time
 from comtypes import CLSCTX_ALL
 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
-# Globals
 volume_running = False
 cap = None
 hands = None
 volume_interface = None
 
-# MediaPipe
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
 
-# Initialize audio once
 def init_audio():
     global volume_interface
     devices = AudioUtilities.GetSpeakers()
@@ -25,7 +22,6 @@ def init_audio():
     volume_interface = interface.QueryInterface(IAudioEndpointVolume)
     return volume_interface
 
-# Start volume control
 def start_volume_control():
     global volume_running, cap, hands, volume_interface
     if volume_running:
@@ -44,13 +40,11 @@ def start_volume_control():
 
     threading.Thread(target=run_volume_control, daemon=True).start()
 
-# Stop volume control
 def stop_volume_control():
     global volume_running
     volume_running = False
-    time.sleep(0.05)  # let thread exit
+    time.sleep(0.05)
 
-# Main loop
 def run_volume_control():
     global volume_running, cap, hands, volume_interface
     pTime = 0
@@ -79,10 +73,9 @@ def run_volume_control():
                            for i, lm in enumerate(hand_landmarks.landmark)]
 
                 if len(lm_list) >= 9:
-                    x1, y1 = lm_list[4][1], lm_list[4][2]  # Thumb tip
-                    x2, y2 = lm_list[8][1], lm_list[8][2]  # Index tip
+                    x1, y1 = lm_list[4][1], lm_list[4][2]
+                    x2, y2 = lm_list[8][1], lm_list[8][2]
 
-                    # Draw line between thumb and index finger
                     cv2.line(img, (x1, y1), (x2, y2), (255, 0, 0), 3)
                     cv2.circle(img, (x1, y1), 10, (255, 0, 0), cv2.FILLED)
                     cv2.circle(img, (x2, y2), 10, (255, 0, 0), cv2.FILLED)
@@ -94,31 +87,22 @@ def run_volume_control():
 
                     volume_interface.SetMasterVolumeLevel(vol, None)
 
-        # Draw volume bar and percentage
-        cv2.rectangle(img, (50, 150), (85, 400), (0, 255, 0), 3)
-        cv2.rectangle(img, (50, int(volBar)), (85, 400), (0, 255, 0), cv2.FILLED)
-        cv2.putText(img, f'{int(volPer)}%', (40, 450), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 255, 0), 3)
         cv2.putText(img, "Volume Control", (10, 30), cv2.FONT_HERSHEY_COMPLEX, 0.7, (0, 255, 0), 2)
         cv2.putText(img, "Pinch thumb and index to adjust volume", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-        # FPS Calculation
         cTime = time.time()
         fps = 1 / (cTime - pTime) if pTime != 0 else 0
         pTime = cTime
         cv2.putText(img, f'FPS: {int(fps)}', (500, 30), cv2.FONT_HERSHEY_PLAIN, 2, (255, 0, 0), 2)
 
-        # Display camera feed
         cv2.imshow("Volume Control", img)
         
-        # Check for ESC key to exit
         if cv2.waitKey(1) == 27:
             volume_running = False
             break
 
-        # Optional: sleep to reduce CPU usage
         time.sleep(0.01)
 
-    # Cleanup
     if cap:
         cap.release()
         cap = None
