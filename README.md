@@ -1,5 +1,3 @@
-# Complete Project Functionality Summary
-
 ## Eye-Controlled Mouse with Voice Commands for Browser Automation
 
 A comprehensive accessibility system that combines **eye tracking**, **voice commands**, and **hand gesture controls** to enable hands-free computer interaction.
@@ -378,4 +376,5 @@ This project provides a **complete hands-free computing solution** combining:
 - 🌐 **Web interface** for easy feature management
 
 The system is designed for **accessibility**, **productivity**, and **hands-free interaction**, making it suitable for users with mobility limitations or anyone wanting to interact with their computer in new ways.
+
 
