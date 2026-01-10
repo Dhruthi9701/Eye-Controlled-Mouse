@@ -1,8 +1,3 @@
-"""
-Voice Assistant - Main orchestrator for system-wide voice control.
-Extends the browser control with full laptop control capabilities.
-"""
-
 import speech_recognition as sr
 import pyttsx3
 import threading
@@ -15,47 +10,43 @@ try:
     from .intent_router import IntentRouter
     from .voice_browser_control import VoiceBrowserController
 except ImportError:
-    # Fallback for direct execution
+    
     from system_control import SystemController
     from intent_router import IntentRouter
     from voice_browser_control import VoiceBrowserController
 
 class VoiceAssistant:
-    """Main voice assistant that controls the entire laptop"""
+    
     
     def __init__(self, silent_mode=False):
-        """Initialize the voice assistant
         
-        Args:
-            silent_mode: If True, skip TTS greeting and reduce console output (for API use)
-        """
         self.silent_mode = silent_mode
         
-        # Speech recognition
+        
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
         
-        # Text-to-speech
+        
         try:
             self.tts_engine = pyttsx3.init()
-            self.tts_engine.setProperty('rate', 150)  # Speed of speech
-            self.tts_engine.setProperty('volume', 0.8)  # Volume (0.0 to 1.0)
+            self.tts_engine.setProperty('rate', 150)  
+            self.tts_engine.setProperty('volume', 0.8)  
             self.tts_enabled = True
         except Exception as e:
             if not silent_mode:
                 print(f"⚠️ TTS not available: {e}")
             self.tts_enabled = False
         
-        # Controllers
+        
         self.system_controller = SystemController()
         self.intent_router = IntentRouter()
         self.browser_controller = VoiceBrowserController()
         
-        # State
+        
         self.listening = False
         self.command_queue = queue.Queue()
         
-        # Configure speech recognition
+        
         self.recognizer.energy_threshold = 300
         self.recognizer.dynamic_energy_threshold = True
         self.recognizer.pause_threshold = 1.2
@@ -76,21 +67,15 @@ class VoiceAssistant:
             print("   • 'Stop listening' - Exit")
     
     def speak(self, text: str, force_speak=False):
-        """Speak text using TTS
         
-        Args:
-            text: Text to speak
-            force_speak: If True, speak even in silent mode (for important confirmations)
-        """
-        # In silent mode, only speak if forced (for critical confirmations)
         if self.silent_mode and not force_speak:
-            # Just print, don't speak
+            
             print(f"🔊 {text}")
             return
         
         if self.tts_enabled:
             try:
-                # Run TTS in a separate thread to avoid blocking
+                
                 def speak_thread():
                     self.tts_engine.say(text)
                     self.tts_engine.runAndWait()
@@ -100,11 +85,11 @@ class VoiceAssistant:
             except Exception as e:
                 print(f"⚠️ TTS error: {e}")
         
-        # Always print to console
+        
         print(f"🔊 {text}")
     
     def listen_for_commands(self):
-        """Listen for voice commands continuously"""
+        
         print("\n🎤 Listening for voice commands...")
         print("💡 Speak clearly and wait for the beep!")
         
@@ -130,12 +115,12 @@ class VoiceAssistant:
                 command = self.recognizer.recognize_google(audio).lower()
                 print(f"🗣️ Heard: '{command}'")
                 
-                # Process command
+                
                 response = self.process_command(command)
                 
-                # Speak response if available
+                
                 if response and isinstance(response, str) and len(response) > 0:
-                    # Only speak if it's a confirmation/result message
+                    
                     if response.startswith("✅") or response.startswith("❌"):
                         self.speak(response)
             
@@ -151,17 +136,17 @@ class VoiceAssistant:
         print("🛑 Voice listening stopped gracefully.")
     
     def process_command(self, command: str) -> Optional[str]:
-        """Process a voice command and return response"""
+        
         command = command.strip().lower()
         
-        # Check for stop/exit commands FIRST (highest priority)
+        
         if "stop listening" in command or command in ["exit", "stop", "quit", "close"]:
             print("🛑 Stop command received - shutting down voice assistant...")
             self.stop_listening()
             return "✅ Voice assistant stopped"
         
-        # Check for browser-specific commands FIRST (before system intents)
-        # This prevents "open chrome" from being caught by generic "open" pattern
+        
+        
         browser_keywords = ["chrome", "browser", "search", "google", "youtube", "video", 
                            "tab", "scroll", "minimize chrome", "maximize chrome",
                            "what's on my screen", "analyze screen", "summarise", "summarize"]
@@ -169,30 +154,30 @@ class VoiceAssistant:
         if any(keyword in command for keyword in browser_keywords):
             try:
                 self.browser_controller.process_command(command)
-                return None  # Browser controller handles its own output
+                return None  
             except Exception as e:
                 print(f"Browser command error: {e}")
-                # Fall through to system intents if browser fails
+                
         
-        # Then try system-wide intents
+        
         intent_type, params = self.intent_router.parse_intent(command)
         
         if intent_type:
             return self._handle_system_intent(intent_type, params)
         
-        # If no system intent matched, try browser commands as fallback
+        
         try:
             self.browser_controller.process_command(command)
-            return None  # Browser controller handles its own output
+            return None  
         except:
             pass
         
-        # Unknown command
+        
         self.speak("I didn't understand that command. Please try again.")
         return "❓ Unknown command"
     
     def _handle_system_intent(self, intent_type: str, params: dict) -> str:
-        """Handle system-wide intents"""
+        
         try:
             if intent_type == "launch_app":
                 app_name = params.get("app_name", "")
@@ -290,11 +275,11 @@ class VoiceAssistant:
             return f"❌ Error executing command: {e}"
     
     def stop_listening(self):
-        """Stop the voice assistant"""
+        
         print("🛑 Stopping voice assistant...")
         self.listening = False
         
-        # Stop browser controller
+        
         try:
             self.browser_controller.stop_listening()
         except:
@@ -303,13 +288,13 @@ class VoiceAssistant:
         print("👋 Voice Assistant stopped!")
     
     def run(self):
-        """Run the voice assistant"""
+        
         if not self.silent_mode:
             print("\n🚀 Starting Voice Assistant...")
         self.listening = True
         
         try:
-            # Only speak greeting if not in silent mode (API mode)
+            
             if not self.silent_mode:
                 self.speak("Voice assistant ready. How can I help you?")
             else:
@@ -326,12 +311,12 @@ class VoiceAssistant:
                 print("🧩 Voice assistant stopped gracefully.")
     
     def stop(self):
-        """Gracefully stop the voice assistant"""
+        
         self.stop_listening()
 
 
 def main():
-    """Main function to run the voice assistant"""
+    
     print("=" * 60)
     print("🤖 VOICE ASSISTANT - LAPTOP CONTROL")
     print("=" * 60)
@@ -342,4 +327,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
