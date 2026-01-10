@@ -1,8 +1,3 @@
-"""
-Standalone script to run the full voice assistant.
-This provides system-wide voice control for your laptop.
-"""
-
 from voice_assistant import VoiceAssistant
 
 if __name__ == "__main__":
