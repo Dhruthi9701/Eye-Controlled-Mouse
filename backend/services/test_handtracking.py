@@ -5,8 +5,7 @@ try:
     import hand_tracking as htm
     print("HandTrackingModule imported successfully")
     print("Available attributes:", dir(htm))
-    
-    # Try different possible class names
+
     possible_names = ['handDetector', 'HandDetector', 'HandTracker', 'handTracker']
     
     for name in possible_names:
