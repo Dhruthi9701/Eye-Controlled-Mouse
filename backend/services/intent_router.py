@@ -1,5 +1,5 @@
 """
-Intent Router - Parses natural language commands and routes them to appropriate handlers.
+Parses natural language commands and routes them to appropriate handlers.
 This enables natural language understanding for system-wide voice commands.
 """
 
@@ -16,15 +16,14 @@ class IntentRouter:
     def _initialize_patterns(self):
         """Initialize command patterns for intent recognition"""
         return {
-            # Application Launching
+        
             "launch_app": [
                 r"open\s+(.+)",
                 r"launch\s+(.+)",
                 r"start\s+(.+)",
                 r"run\s+(.+)",
             ],
-            
-            # File System Operations
+      
             "open_location": [
                 r"open\s+(?:file\s+)?explorer",
                 r"open\s+this\s+pc",
@@ -36,15 +35,13 @@ class IntentRouter:
                 r"go\s+to\s+(.+)",
             ],
             
-            # File Search
             "search_files": [
                 r"search\s+for\s+(?:file\s+)?(.+)",
                 r"find\s+(?:file\s+)?(.+)",
                 r"look\s+for\s+(?:file\s+)?(.+)",
                 r"where\s+is\s+(.+)",
             ],
-            
-            # Window Management
+     
             "switch_window": [
                 r"switch\s+to\s+(.+)",
                 r"go\s+to\s+(.+)",
@@ -56,8 +53,7 @@ class IntentRouter:
                 r"show\s+(?:me\s+)?(?:open\s+)?windows",
                 r"what\s+windows\s+are\s+open",
             ],
-            
-            # System Information
+           
             "system_info": [
                 r"(?:what\s+is\s+)?(?:the\s+)?system\s+(?:status|info|information)",
                 r"how\s+is\s+(?:the\s+)?(?:system|computer|pc|laptop)",
@@ -71,7 +67,7 @@ class IntentRouter:
                 r"battery\s+info",
             ],
             
-            # System Actions
+       
             "lock_screen": [
                 r"lock\s+(?:the\s+)?(?:screen|computer|pc|laptop)",
                 r"lock\s+system",
@@ -92,8 +88,7 @@ class IntentRouter:
                 r"reboot",
                 r"restart\s+(?:the\s+)?(?:computer|pc|laptop)",
             ],
-            
-            # Desktop Interactions
+         
             "show_desktop": [
                 r"show\s+desktop",
                 r"show\s+me\s+the\s+desktop",
@@ -127,8 +122,7 @@ class IntentRouter:
             Tuple of (intent_type, parameters_dict)
         """
         command = command.strip().lower()
-        
-        # Try each intent pattern
+     
         for intent_type, patterns in self.patterns.items():
             for pattern in patterns:
                 match = re.search(pattern, command, re.IGNORECASE)
@@ -136,7 +130,6 @@ class IntentRouter:
                     params = self._extract_parameters(intent_type, match, command)
                     return intent_type, params
         
-        # No intent matched
         return None, {}
     
     def _extract_parameters(self, intent_type: str, match: re.Match, full_command: str) -> Dict:
@@ -144,25 +137,25 @@ class IntentRouter:
         params = {}
         
         if intent_type == "launch_app":
-            # Extract app name from capture group
+   
             if match.groups():
                 app_name = match.group(1).strip()
-                # Remove common prefixes
+    
                 app_name = re.sub(r"^(?:the\s+)?(?:application\s+)?", "", app_name, flags=re.IGNORECASE)
                 params["app_name"] = app_name
         
         elif intent_type == "open_location":
-            # Check for special location names
+        
             if match.groups():
                 location = match.group(1).strip() if len(match.groups()) > 0 else None
                 if location:
                     params["location"] = location
             else:
-                # Check for "this pc" or "file explorer"
+         
                 if "this pc" in full_command or "my computer" in full_command:
                     params["location"] = "this pc"
                 elif "file explorer" in full_command or "explorer" in full_command:
-                    params["location"] = None  # Just open explorer
+                    params["location"] = None 
         
         elif intent_type == "search_files":
             if match.groups():
@@ -175,11 +168,11 @@ class IntentRouter:
                 params["window_name"] = window_name
         
         elif intent_type in ["shutdown", "restart"]:
-            # Check for delay
+    
             delay_match = re.search(r"(\d+)\s*(?:seconds?|secs?|minutes?|mins?)", full_command)
             if delay_match:
                 delay = int(delay_match.group(1))
-                # Convert minutes to seconds
+          
                 if "minute" in delay_match.group(0) or "min" in delay_match.group(0):
                     delay *= 60
                 params["delay"] = delay
