@@ -1,7 +1,3 @@
-"""
-Microphone test for speech recognition debugging
-"""
-
 import speech_recognition as sr
 import time
 
@@ -10,11 +6,10 @@ def test_microphone():
     print("=" * 40)
     
     r = sr.Recognizer()
-    
-    # Adjust recognition settings for better performance
-    r.energy_threshold = 200  # Lower threshold
+
+    r.energy_threshold = 200  
     r.dynamic_energy_threshold = True
-    r.pause_threshold = 0.5   # Shorter pause
+    r.pause_threshold = 0.5 
     
     print("🔧 Adjusting for ambient noise...")
     with sr.Microphone() as source:
