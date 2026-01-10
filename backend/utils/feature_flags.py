@@ -1,4 +1,3 @@
-# Define available features
 FEATURES = {
     "eye_control": True,
     "voice_commands": True,
